@@ -176,15 +176,32 @@ Windows gap in the skill's README.
   Spike only confirms it's safe to *mention* as what users may already have (maintained?
   state-dir layout?).
 - `npx playwright`: minimal footprint for screenshots (browser download, headless flags).
-- **Editor-side block validation recipe**: Studio's `validate_and_fix_blocks` is not backend
-  magic — it opens `post-new.php` in a browser and runs `wp.blocks.parse()` +
-  `wp.blocks.validateBlock()` via `page.evaluate` (see Studio
-  `apps/cli/ai/block-validator.ts`; "the same save-function comparison the Gutenberg editor
-  performs on load"), with auto-fix = the editor's own re-serialization. Spike: reproduce this
-  as a Playwright snippet against a Playground site (auto-login makes wp-admin reachable).
-  If it works, it closes the worst silent-failure gap — invalid blocks render fine on the
-  frontend and only break in the editor, so screenshot-based verification alone cannot catch
-  them.
+- **Block validation — two tiers, one validator** (Gutenberg's save-function comparison, run in
+  two contexts; invalid blocks render fine on the frontend and only break in the editor, so
+  screenshot-based verification alone cannot catch the worst silent failure):
+  - **Inner loop — node validator (verified 2026-06-11)**: distilled from Telex
+    `server/scripts/block-fixer/` (insight from its own header: "parse() automatically applies
+    validation fixes — just parse and re-serialize"). `@wordpress/blocks` `parse()` reports
+    `isValid` + reasons; `createBlock(name, attributes, innerBlocks)` + `serialize()`
+    regenerates canonical markup from attributes. Verified standalone: ~30-line script, npm
+    deps install in ~40s one-time, ~1–2s per run, no browser, no server. In testing it caught
+    Telex's own stale cover example (`has-background-dim-50` with `dimRatio:50` — invalid per
+    current serializer) and surfaced that paragraph `{"align":"center"}` is now a deprecated
+    serialization (auto-migrated to `style.typography.textAlign`). Caveats: **core blocks
+    only** (`registerCoreBlocks()`), validates against the npm package version, not the site's
+    WP. The jsdom shims are brittle (8 globals) — ship the snippet **verbatim** in the skill
+    (determinism-as-safety, same exception class as the backup script); agents improvising the
+    shims will burn turns.
+  - **Final gate — editor-side recipe (spike)**: Studio's `validate_and_fix_blocks` is not
+    backend magic — it opens `post-new.php` and runs `wp.blocks.validateBlock()` via Playwright
+    `page.evaluate` (see Studio `apps/cli/ai/block-validator.ts`) against the **site's full
+    registry — core + plugins — and the site's actual WP version**. Spike: reproduce against a
+    Playground site (auto-login makes wp-admin reachable). Run before declaring done / before
+    deploy; **mandatory whenever plugin blocks are present** (WooCommerce etc. — invisible to
+    the node tier).
+  - Both tiers (and all npx local tooling) share one prerequisite: **Node 18+, declared in
+    SKILL.md for local workflows** — remote-only SSH/MCP paths need no Node (wp-cli runs
+    server-side).
 - **Preview/share path**: Studio's WP.com preview sites are backend-tied and not replicable.
   Spike whether `build-snapshot` + a Playground blueprint URL is a good-enough shareable
   preview; otherwise "previews" = deploy to a real staging site.
@@ -236,11 +253,24 @@ wordpress/
     │                               #   wp-cli via `php -- /host/wp-cli.phar` recipe (incl.
     │                               #   server-vs-one-off concurrency rule), runtime validation
     │                               #   loop, Playground-vs-production diffs
-    ├── block-markup.md             # Block HTML validity + layout cascade (Telex block-html.md
-    │                               #   merged with Studio block-content; the highest-value content)
-    │                               #   + editor-validation loop: Playwright → post-new.php →
-    │                               #   wp.blocks.validateBlock() (the Studio harness recipe —
-    │                               #   mandatory before declaring theme/pattern work done)
+    ├── block-markup.md             # Block HTML validity + layout cascade; the highest-value
+    │                               #   content. DECIDED (M5 — the two sources contradict, no
+    │                               #   merge possible): styling is **attribute-serialized**
+    │                               #   (Telex philosophy) — block JSON + theme.json as default;
+    │                               #   style.css ONLY for what attributes can't express (hover,
+    │                               #   media queries, cross-block consistency); never both
+    │                               #   layers for the same property. Studio's "no inline/block
+    │                               #   style attributes" rule is dropped; its layout-cascade +
+    │                               #   .wp-element-button facts are kept (durable either way).
+    │                               #   Every Telex example re-verified against the current
+    │                               #   serializer before extraction (two stale facts already
+    │                               #   proven: cover dimRatio-50 class, paragraph align).
+    │                               #   + the two-tier validation loop: node validator (verbatim
+    │                               #   snippet) after every template write; editor gate via
+    │                               #   Playwright before done/deploy, mandatory with plugin
+    │                               #   blocks. Fix direction = regenerate from attributes,
+    │                               #   which presumes the attribute-serialized decision — the
+    │                               #   philosophy and the fixer reinforce each other.
     ├── themes-and-patterns.md      # Theme structure, theme.json v3, fonts, patterns, navigation,
     │                               #   query loops (Telex creating-themes + generating-patterns
     │                               #   + navigation.md + query-loop.md, filtered)
@@ -278,9 +308,11 @@ bare agent actually got wrong. The list above is the hypothesis.
   - Backup (db export + changed files, copied off-host) before any destructive remote operation.
   - Never edit WordPress core. Confirm production writes. Dry-run search-replace first.
   - Always stop local servers you started.
-- No wrapper scripts. Document raw commands; the agent composes them. Exception: if Phase 1 shows
-  the backup sequence is error-prone, ship a single `scripts/wpcom-backup.sh` (determinism as a
-  safety property). Nothing else.
+- No wrapper scripts. Document raw commands; the agent composes them. Two exceptions, both
+  determinism-as-safety: (1) if Phase 1 shows the backup sequence is error-prone, ship a single
+  `scripts/wpcom-backup.sh`; (2) the node block-validator snippet ships **verbatim** (inline in
+  block-markup.md or as `scripts/validate-blocks.mjs`) — its jsdom shims are too brittle to
+  improvise and it targets the worst silent failure. Nothing else.
 
 ### Content filter (applies to every extracted paragraph)
 
@@ -301,8 +333,9 @@ bare agent actually got wrong. The list above is the hypothesis.
 
 | Priority | Source | What it's for |
 |---|---|---|
-| High | Telex `creating-themes/references/block-html.md` + telex.md validity rules | block-markup.md |
-| High | Studio `block-content` (layout cascade, `.wp-element-button`) | block-markup.md |
+| High | Telex `creating-themes/references/block-html.md` + telex.md validity rules (every example re-serialized through the node validator before landing — stale facts proven) | block-markup.md |
+| High | Studio `block-content` (layout cascade, `.wp-element-button`; its no-inline-styles policy is **dropped** per the M5 decision) | block-markup.md |
+| High | Telex `server/scripts/block-fixer/` (parse → createBlock → serialize core, distilled to a verbatim snippet; jsdom shim list included) | block-markup.md |
 | High | Telex `creating-themes` + `references/design-direction.md` | themes-and-patterns.md, design.md |
 | High | Studio `wp-files/skills/wp-wpcli-and-ops` + references/safety, search-replace | backups-and-safety.md, deploy.md |
 | High | Telex `testing-wp-runtime` (server → curl → debug.log → cleanup loop; its fixed-port-8881 rule is superseded by the recorded-port convention) | local-sites.md |
@@ -327,7 +360,7 @@ over stock npx tools — the user installs nothing. Current mapping:
 | site lifecycle, `studio wp` | `npx @wp-playground/cli` + wp-cli phar recipe | verified |
 | server daemon + IPC registry | detached start + site-dir state files (`.playground/{pid,port,log}`) | spike: cross-turn survival on all 4 agents |
 | `take_screenshot` | `npx playwright screenshot` | verified |
-| `validate_and_fix_blocks` | Playwright → `wp.blocks.validateBlock()` in editor | spike (recipe identified) |
+| `validate_and_fix_blocks` | two tiers: node validator (Telex block-fixer distilled) + Playwright editor gate for plugin blocks | node tier **verified**; editor gate spike |
 | `inspect_design` | Playwright `page.evaluate` (DOM + computed styles) | spike |
 | `scaffold_theme` | agent writes files | trivial |
 | import/export | `wp db export` + tar | recipe |
