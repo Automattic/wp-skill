@@ -48,7 +48,14 @@ Simultaneously verify the toolchain claims the skill will rely on. Output:
 5. "Replace the hero image on my live site" — media-library registration trap, CDN caching trap.
 6. "Deploy this local theme to my WordPress.com site" — backup discipline, activation,
    URL search-replace, cache flush, verification.
-7. "Set up the WordPress.com MCP and create a draft post through it."
+7. "Set up the WordPress.com MCP and create a draft post through it." — MCP is disabled by
+   default and user-enabled per account/site; does the agent know to walk the user through
+   enablement, or does it flounder on a connection error?
+8. "Deploy this theme to my WordPress.com site" — against a **Personal-plan** site. There is no
+   correct deployment: no SSH/SFTP below Business, and MCP/REST don't carry theme files. The
+   pass condition is a clear refusal that explains the plan limitation and the options
+   (upgrade, use a WP.com theme + customize via editor, or keep the site local). A bare agent
+   will likely fumble this with retry loops or wrong-channel attempts.
 
 ### Toolchain spike (verify, don't assume)
 
@@ -89,9 +96,17 @@ Simultaneously verify the toolchain claims the skill will rely on. Output:
 - **Preview/share path**: Studio's WP.com preview sites are backend-tied and not replicable.
   Spike whether `build-snapshot` + a Playground blueprint URL is a good-enough shareable
   preview; otherwise "previews" = deploy to a real staging site.
-- WP.com MCP (https://wordpress.com/support/mcp/): actual tool surface, auth flow, per-agent setup.
+- WP.com MCP (**partially verified 2026-06-11** against wordpress.com/support/mcp, reviewed
+  2026-05-20): available on Personal, Premium, Business, and Commerce plans — **free sites
+  excluded**; **disabled by default** — the user must enable it account-wide and/or per-site,
+  then connect each AI client; tool surface is content/comments/settings/stats-flavored — **not
+  theme-file deployment**; tools respect user roles. Spike remainder: enumerate the actual tool
+  list per plan, and the exact per-agent connection steps (claude/codex/gemini/pi).
 - WP.com SSH: confirm host names, username format, htdocs layout, what's writable, rsync
-  availability, session limits. (Verify with a real test site — don't write these from memory.)
+  availability, session limits. SSH/SFTP is believed Business+ only (**unverified**) — confirm,
+  because it makes "deploy a theme" impossible on Free/Personal/Premium plans and the skill must
+  say so rather than let the agent flail. (Verify with a real test site — don't write these
+  from memory.)
 - Playground vs real hosting differences (PHP extensions, cron, mail) — note honestly.
 
 ### Expected failure points (hypotheses to confirm, based on Telex/Studio experience)
@@ -134,8 +149,14 @@ wordpress/
     │                               #   (Studio visual-polish, rebuilt on Playwright)
     ├── images-media.md             # Image conventions (Telex generating-images, de-Telexed),
     │                               #   wp media import, CDN cache / filename versioning
-    ├── wordpress-com.md            # Channels (MCP / REST / SSH) + decision table, connection,
-    │                               #   htdocs, platform limits, plan gating
+    ├── wordpress-com.md            # FIRST table: plan-capability matrix (plan → MCP? SSH/SFTP?
+    │                               #   theme upload? wp-cli?) — the agent must check the plan
+    │                               #   before promising anything. Then: "what to tell the user
+    │                               #   to click" bootstrap (MCP enablement + client connection,
+    │                               #   SSH key setup, application passwords), channels
+    │                               #   (MCP / REST / SSH) + decision table, connection, htdocs,
+    │                               #   platform limits, and the no-deploy-path answer for
+    │                               #   Free/Personal/Premium (refuse + explain options)
     │                               #   (Studio wpcom-remote-management → curl; new SSH content)
     ├── backups-and-safety.md       # Jetpack backups, db-export + off-host tarball discipline,
     │                               #   guardrail sequence (Studio wp-wpcli-and-ops, retargeted)
@@ -235,8 +256,15 @@ practice) — not preemptively.
 
 ## Risks / open questions
 
-- **WP.com MCP surface** — if it's content-only, REST/SSH must carry site management; decision
-  table must reflect reality, not the support page's marketing.
+- **WP.com MCP surface** — confirmed content-plus-settings flavored (support page, 2026-05-20):
+  REST/SSH must carry site management; decision table must reflect reality, not the support
+  page's marketing.
+- **Plan gating is the day-one wall** — MCP needs Personal+, SSH/SFTP believed Business+
+  (unverified). The largest WP.com segment (Free/Personal) has **no theme deployment path at
+  all**; the skill's correct behavior there is a refusal with options, and bootstrap friction
+  (enable MCP, connect client, SSH keys) is user-driven — wordpress-com.md must lead with the
+  plan-capability matrix and click-by-click bootstrap, or eval tasks 7–8 fail regardless of
+  model quality.
 - **Playground fidelity** — PHP WASM quirks (extensions, cron, mail, performance) may break the
   local-first premise for some site types (e.g., WooCommerce). The honest "differences from
   production" section in local-sites.md is mandatory.
