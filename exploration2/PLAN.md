@@ -129,7 +129,34 @@ Windows gap in the skill's README.
 - **Open spike question**: concurrent access — a one-off wp-cli process and a running server share
   one `.ht.sqlite` through independent WASM filesystems. Test whether a concurrent write corrupts,
   errors, or works; until then the rule is "stop the server before one-off wp-cli writes".
-- wp-now: still maintained? Good enough as the simpler fallback?
+- **Server lifecycle across agents (the Studio-daemon convention)**: the four agents have
+  different process semantics (Claude Code has native background tasks; Codex's sandbox may not
+  keep backgrounded children alive between commands and blocks network by default; pi's bash is
+  synchronous). Studio solves this with a daemon + IPC registry: the server is never a child of
+  any command. The skill replicates both properties as **one convention, no script**:
+
+  ```bash
+  # start (idempotent: check .playground/server.pid first)
+  mkdir -p .playground
+  setsid nohup npx @wp-playground/cli server --port=<free-port> \
+    > .playground/server.log 2>&1 & echo $! > .playground/server.pid
+  echo <free-port> > .playground/server.port
+  # ready:  curl poll on $(cat .playground/server.port)
+  # stop:   kill $(cat .playground/server.pid); verify port free; rm state files
+  ```
+
+  Ports are **recorded, never fixed and never assumed** — this replaces Telex's "always 8881"
+  (which collides across concurrent agents; wp-now still defaults to 8881) and survives
+  multi-turn amnesia (turn-3 agent reads the port file instead of guessing). Spike must verify
+  on **all four agents**: start server turn 1 → curl it turn 3 → kill it turn 5. If an agent's
+  sandbox provably kills `setsid`-detached processes, document that agent's native escape hatch
+  (e.g. Claude Code background tasks) as the fallback — but only with evidence, and the
+  convention stays the single recommended path.
+- wp-now: **demoted — not the recommended path.** One server tool, one lifecycle: the skill
+  recommends `@wp-playground/cli` only (it carries the validated wp-cli recipe, mounts, and
+  snapshots; wp-now adds a second lifecycle, a second port default, and no unique capability).
+  Spike only confirms it's safe to *mention* as what users may already have (maintained?
+  state-dir layout?).
 - `npx playwright`: minimal footprint for screenshots (browser download, headless flags).
 - **Editor-side block validation recipe**: Studio's `validate_and_fix_blocks` is not backend
   magic — it opens `post-new.php` in a browser and runs `wp.blocks.parse()` +
@@ -182,7 +209,11 @@ pass criteria above, then map failures back to (or beyond) this list.
 wordpress/
 ├── SKILL.md                        # Thin router + non-negotiable safety rules
 └── references/                     # Written against Phase 1 failure list; candidates below
-    ├── local-sites.md              # Playground/wp-now: bootstrap, mount, blueprints, lifecycle,
+    ├── local-sites.md              # Playground (single recommended server): bootstrap, mount,
+    │                               #   blueprints, the site-dir lifecycle convention (detached
+    │                               #   start + .playground/{pid,port,log} state files, idempotent
+    │                               #   start, readiness poll, kill-by-pidfile — ports recorded,
+    │                               #   never fixed/assumed),
     │                               #   wp-cli via `php -- /host/wp-cli.phar` recipe (incl.
     │                               #   server-vs-one-off concurrency rule), runtime validation
     │                               #   loop, Playground-vs-production diffs
@@ -255,7 +286,7 @@ bare agent actually got wrong. The list above is the hypothesis.
 | High | Studio `block-content` (layout cascade, `.wp-element-button`) | block-markup.md |
 | High | Telex `creating-themes` + `references/design-direction.md` | themes-and-patterns.md, design.md |
 | High | Studio `wp-files/skills/wp-wpcli-and-ops` + references/safety, search-replace | backups-and-safety.md, deploy.md |
-| High | Telex `testing-wp-runtime` (server → curl → debug.log → cleanup loop) | local-sites.md |
+| High | Telex `testing-wp-runtime` (server → curl → debug.log → cleanup loop; its fixed-port-8881 rule is superseded by the recorded-port convention) | local-sites.md |
 | Med | Telex `generating-patterns`, `navigation.md`, `query-loop.md` | themes-and-patterns.md |
 | Med | Telex blocks/plugins skills + inner-blocks, interactivity-api refs | blocks-and-plugins.md |
 | Med | Studio `wpcom-remote-management` (API namespace map, `_fields` trimming) | wordpress-com.md |
@@ -275,6 +306,7 @@ over stock npx tools — the user installs nothing. Current mapping:
 | Studio tool | Skill equivalent | Status |
 |---|---|---|
 | site lifecycle, `studio wp` | `npx @wp-playground/cli` + wp-cli phar recipe | verified |
+| server daemon + IPC registry | detached start + site-dir state files (`.playground/{pid,port,log}`) | spike: cross-turn survival on all 4 agents |
 | `take_screenshot` | `npx playwright screenshot` | verified |
 | `validate_and_fix_blocks` | Playwright → `wp.blocks.validateBlock()` in editor | spike (recipe identified) |
 | `inspect_design` | Playwright `page.evaluate` (DOM + computed styles) | spike |
