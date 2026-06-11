@@ -135,23 +135,41 @@ Windows gap in the skill's README.
   synchronous). Studio solves this with a daemon + IPC registry: the server is never a child of
   any command. The skill replicates both properties as **one convention, no script**:
 
+  The convention is phrased as **"ensure running" (convergent), not "start" (imperative)** —
+  agents re-run things blindly, so the recipe must be safe to re-run blindly. This is how
+  mature monorepos phrase server lifecycle for agents (health-check first, converge to running):
+
   ```bash
-  # start (idempotent: check .playground/server.pid first)
+  # ensure running (idempotent — safe to re-run every time the server is needed):
+  # 1. if .playground/server.port exists and curl on it answers → done, reuse it
+  # 2. else: clean stale state (kill recorded pid if alive, rm .playground/server.*)
+  # 3. then start detached and record the registry:
   mkdir -p .playground
   setsid nohup npx @wp-playground/cli server --port=<free-port> \
     > .playground/server.log 2>&1 & echo $! > .playground/server.pid
   echo <free-port> > .playground/server.port
-  # ready:  curl poll on $(cat .playground/server.port)
-  # stop:   kill $(cat .playground/server.pid); verify port free; rm state files
+  # 4. poll curl on $(cat .playground/server.port) until ready; on failure read server.log
+  # stop: kill $(cat .playground/server.pid); verify port free; rm .playground/server.*
   ```
 
   Ports are **recorded, never fixed and never assumed** — this replaces Telex's "always 8881"
   (which collides across concurrent agents; wp-now still defaults to 8881) and survives
   multi-turn amnesia (turn-3 agent reads the port file instead of guessing). Spike must verify
-  on **all four agents**: start server turn 1 → curl it turn 3 → kill it turn 5. If an agent's
-  sandbox provably kills `setsid`-detached processes, document that agent's native escape hatch
-  (e.g. Claude Code background tasks) as the fallback — but only with evidence, and the
-  convention stays the single recommended path.
+  on **all four agents**: ensure-running turn 1 → curl it turn 3 → stop it turn 5, plus one
+  blind re-run of ensure-running against an already-live server (must reuse, not double-start).
+
+  **Fallback ladder (pre-decided; descend only on spike evidence, never preemptively).** If an
+  agent's sandbox provably kills `setsid`-detached processes:
+  1. **tmux if present** (`tmux new-session -d -s wp-<site>`) — the tmux server owns the
+     process and session names are a global registry; no per-agent logic, just a presence
+     check. Not preinstalled everywhere, hence not the primary.
+  2. **Agent-native backgrounding** (e.g. Claude Code background tasks) — per-agent docs, so
+     strictly worse for a portable skill; only for agents where 1 is unavailable.
+  3. **"Ask the user to run it"** — last resort; documented honestly as the floor, since it
+     breaks autonomous test loops.
+
+  Whatever the spike concludes, the ensure-running convention stays the single recommended
+  path; fallbacks are exceptions scoped to the agent that failed, recorded with the evidence.
 - wp-now: **demoted — not the recommended path.** One server tool, one lifecycle: the skill
   recommends `@wp-playground/cli` only (it carries the validated wp-cli recipe, mounts, and
   snapshots; wp-now adds a second lifecycle, a second port default, and no unique capability).
@@ -210,10 +228,11 @@ wordpress/
 ├── SKILL.md                        # Thin router + non-negotiable safety rules
 └── references/                     # Written against Phase 1 failure list; candidates below
     ├── local-sites.md              # Playground (single recommended server): bootstrap, mount,
-    │                               #   blueprints, the site-dir lifecycle convention (detached
-    │                               #   start + .playground/{pid,port,log} state files, idempotent
-    │                               #   start, readiness poll, kill-by-pidfile — ports recorded,
-    │                               #   never fixed/assumed),
+    │                               #   blueprints, the ensure-running lifecycle convention
+    │                               #   (convergent, not imperative: health-check → stale-state
+    │                               #   cleanup → detached start + .playground/{pid,port,log}
+    │                               #   registry → readiness poll; stop by pidfile — ports
+    │                               #   recorded, never fixed/assumed) + the fallback ladder,
     │                               #   wp-cli via `php -- /host/wp-cli.phar` recipe (incl.
     │                               #   server-vs-one-off concurrency rule), runtime validation
     │                               #   loop, Playground-vs-production diffs
