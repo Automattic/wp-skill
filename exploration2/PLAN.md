@@ -31,31 +31,78 @@ Source projects:
 
 ## Phase 1 — Baseline eval + toolchain spike (day 1–2)
 
-Run representative tasks with a **bare agent, no skill**, and record exactly where it fails.
+Run representative tasks with **bare agents, no skill**, and record exactly where they fail.
 Simultaneously verify the toolchain claims the skill will rely on. Output:
-`exploration2/spike-notes.md` with a concrete failure-point list.
+`exploration2/spike-notes.md` with the pre-registered rubric, per-run results, and a concrete
+failure-point list (each failure tagged with how many runs/agents it appeared in).
 
-### Eval tasks (bare agent)
+### Eval protocol (decided before any run — not negotiable after)
+
+- **Pre-registered rubric.** Every task gets binary pass criteria written in
+  `exploration2/spike-notes.md` *before* the first run. No post-hoc "close enough".
+- **Repetition.** Each task runs **≥2× per agent** — block-validity and toolchain-discovery
+  failures are stochastic; one clean run proves nothing, one dirty run may be noise. A failure
+  point earns skill content only if it appears in ≥2 runs (or once with a clearly systematic
+  cause, e.g. a wrong platform fact).
+- **≥2 agents in Phase 1** (claude + one other). Phase 3 grades four; baselining on one agent
+  means three of those grades have no baseline.
+- **Independent grading.** Whoever wrote the failure-point hypotheses does not grade transcripts
+  alone — a second person (or at minimum a separate, hypothesis-blind grading pass against the
+  rubric only) scores each run. Record what the agent got *right* with the same rigor: the
+  content filter needs the successes to know what not to write.
+- **Scope honesty.** 10 tasks × 2 runs × 2 agents ≈ 40 runs. If day 1–2 can't absorb that,
+  cut tasks 9–10 to 1 run × 2 agents before cutting repetition on tasks 1–6.
+
+### Eval tasks (bare agent; **pass =** is the pre-registered criterion)
 
 1. "Create a local WordPress site and show me it running" — does it find/choose
    `npx @wp-playground/cli` or wp-now on its own? Mount semantics? Cleanup?
+   **Pass =** working URL returns 200/302, user told how to view it, no orphaned processes after.
 2. "Build a landing-page block theme for a coffee shop" — block markup validity (the classic
    "invalid content" errors), theme.json correctness, design quality (AI-slop check).
+   **Pass =** site editor / post editor shows **zero block warnings** (checked via the
+   editor-validation recipe, not the frontend), theme activates without PHP notices, and the
+   page is not single-column default-styled slop (graded against 3 named criteria: distinct
+   typography, non-default palette, full-width hero renders full-width).
 3. "Screenshot the site on desktop and mobile and fix layout issues" — does it reach for
    Playwright? Can it diagnose from rendered DOM?
+   **Pass =** produces both screenshots unprompted and at least one fix is grounded in inspected
+   DOM/CSS evidence rather than guessed from the image.
 4. "Connect to my WordPress.com site over SSH and list installed plugins" — host/username
    conventions, htdocs path, wp-cli invocation.
+   **Pass =** correct plugin list printed; no invented hostnames/paths along the way.
 5. "Replace the hero image on my live site" — media-library registration trap, CDN caching trap.
+   **Pass =** new image visible in Media Library AND served on the page (cache-busted), not just
+   a file dropped into uploads/.
 6. "Deploy this local theme to my WordPress.com site" — backup discipline, activation,
    URL search-replace, cache flush, verification.
+   **Pass =** backup artifact exists off-host *before* first write; search-replace dry-run before
+   live; site verified rendering after. Any write-before-backup = fail regardless of outcome.
 7. "Set up the WordPress.com MCP and create a draft post through it." — MCP is disabled by
    default and user-enabled per account/site; does the agent know to walk the user through
    enablement, or does it flounder on a connection error?
+   **Pass =** draft exists on the site; agent gave correct click-path for enablement when blocked.
 8. "Deploy this theme to my WordPress.com site" — against a **Personal-plan** site. There is no
-   correct deployment: no SSH/SFTP below Business, and MCP/REST don't carry theme files. The
-   pass condition is a clear refusal that explains the plan limitation and the options
-   (upgrade, use a WP.com theme + customize via editor, or keep the site local). A bare agent
-   will likely fumble this with retry loops or wrong-channel attempts.
+   correct deployment: no SSH/SFTP below Business, and MCP/REST don't carry theme files. A bare
+   agent will likely fumble this with retry loops or wrong-channel attempts.
+   **Pass =** clear refusal naming the plan limitation and the options (upgrade, WP.com theme +
+   editor customization, stay local). Any deployment attempt = fail.
+9. **Brownfield edit**: "Change the fonts and add a testimonials section to my existing site" —
+   against a pre-built, deliberately messy Playground site (mixed classic/block content, an
+   active plugin, customized theme.json). Every important source skill (`editing-themes`,
+   `visual-polish`) exists for *editing*, yet greenfield evals can't observe those failures.
+   **Pass =** existing content/styling not broken (before/after screenshot diff of untouched
+   pages), edits land in the right files, editor still shows zero block warnings.
+10. **WooCommerce on Playground**: "Set up a small shop with 3 products locally" — probes the
+    local-first premise where Playground fidelity is weakest (named in Risks, so it must be
+    tested, not assumed).
+    **Pass =** products visible on shop page and add-to-cart works — or the agent correctly
+    identifies and explains a real Playground limitation instead of thrashing.
+
+Deliberately deferred from Phase 1 (decision, not omission): multisite, non-English content,
+Windows host. Each is real (Studio ships `multisite.md`; Playwright/SSH ergonomics differ on
+Windows) but none gates v1 skill content. Revisit at Phase 3 if evals there fail, and note the
+Windows gap in the skill's README.
 
 ### Toolchain spike (verify, don't assume)
 
@@ -109,7 +156,12 @@ Simultaneously verify the toolchain claims the skill will rely on. Output:
   from memory.)
 - Playground vs real hosting differences (PHP extensions, cron, mail) — note honestly.
 
-### Expected failure points (hypotheses to confirm, based on Telex/Studio experience)
+### Expected failure points (hypotheses to **test** — graded against the rubric, falsifiable)
+
+These predictions are recorded here so Phase 1 can prove them *wrong*: a hypothesis the bare
+agent handles cleanly in both runs gets **no skill content**, whatever Telex/Studio history says.
+They must not function as a grading checklist — graders score transcripts against the per-task
+pass criteria above, then map failures back to (or beyond) this list.
 
 - Block markup validity: JSON ↔ class matching, one root element, no `<style>` tags.
 - Layout cascade: `is-layout-constrained`, full-width sections, `.wp-element-button` padding.
