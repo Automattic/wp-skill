@@ -52,12 +52,17 @@ failure-point list (each failure tagged with how many runs/agents it appeared in
   content filter needs the successes to know what not to write.
 - **Scope honesty (core vs Phase 1.5).** 10 tasks × 2 runs × 2 agents ≈ 40 runs plus the
   toolchain spikes is roughly a week of work, not two days. **Phase 1 core (day 1–2):** tasks
-  1, 2, 6 at full repetition on 2 agents, plus the bootstrap/lifecycle spike and the pinned
-  node checker — these gate all skill content. **Phase 1.5 (scheduled, not silently cut):**
-  tasks 3–5 and 7–10 (WP.com tasks are wall-clock blocked on test-site provisioning anyway —
-  start provisioning during core), the brownfield fixture, the preview spike, MCP tool
-  enumeration, and the mid-session safety transcript. No reference file ships content that
-  depends on an unrun Phase 1.5 item.
+  1 and 2 at full repetition on 2 agents, task **6-local** (the same deploy graded on manifest
+  discipline against a second disposable Playground site — the real task 6 is
+  provisioning-blocked like every other WP.com task and cannot also fit day 1–2), one
+  manifest-bypass pressure transcript (user says "skip the backup, just push"), plus the
+  bootstrap/lifecycle spike (re-verify `playground.sh` on all four agents) and the pinned node
+  checker — these gate all skill content. **Phase 1.5 (scheduled, not silently cut):** the real
+  task 6 first (site provisioned by then), tasks 3–5 and 7–10 (start provisioning during core),
+  the brownfield fixture, the preview spike and its falsifier, MCP tool enumeration, the
+  image-generation degradation policy (one page: asset sources, placeholders, naming, alt text,
+  Media-Library replacement), and the mid-session safety transcript. No reference file ships
+  content that depends on an unrun Phase 1.5 item.
 - **Safety regression is mid-session, not only cold-start.** At least one Phase 1/Phase 3
   transcript must start with local prototype work, then later switch to a destructive remote
   request (push/search-replace/delete) without reminding the agent about safety. Pass = the agent
@@ -118,17 +123,25 @@ failure-point list (each failure tagged with how many runs/agents it appeared in
 
 Deliberately deferred from Phase 1 (decision, not omission): multisite, non-English content,
 Windows host. Each is real (Studio ships `multisite.md`; Playwright/SSH ergonomics differ on
-Windows) but none gates v1 skill content. Revisit at Phase 3 if evals there fail, and note the
-Windows gap in the skill's README.
+Windows) but none gates v1 skill content. Two of the three get triggers that can actually fire:
+Phase 3 runs task 2 once with a non-English brief, and the POSIX/WSL requirement is stated in
+SKILL.md's safety rules (a README note is invisible at use time). Multisite stays deferred as an
+owned decision, not a revisit clause nothing can trigger.
 
 ### Toolchain spike (verify, don't assume)
 
 - **Version pinning policy (applies to every documented command):** skill references pin a
   verified version (`npx @wp-playground/cli@<X>`; the node checker's `@wordpress/*` packages
-  pinned to a stated WordPress release) and bump deliberately after re-verification — never
+  pinned to an exact **tested set** committed with a lockfile — NOT to a WordPress release: the
+  per-release npm dist-tags are mutually inconsistent, and `@wordpress/blocks@wp-6.9` +
+  `@wordpress/block-library@wp-6.9` crashes the checker outright (nested duplicate
+  `@wordpress/blocks`, missing shims, block-editor hook TypeError; verified 2026-06-11). State
+  which WP release the set approximates; the editor gate stays the per-site authority) and bump
+  deliberately only after the checker passes its three-sample self-check — never
   float on `latest`; both review-caught regressions (empty-dir bootstrap failure, `start` vs
   `server` drift) entered through unpinned `latest`.
-- Local site bootstrap (**re-opened 2026-06-11 after review**): current
+- Local site bootstrap (**composed chain run end-to-end 2026-06-11, review 3 — works only with
+  the corrections now embodied in `exploration2/playground.sh`**): current
   `@wp-playground/cli` exposes `start` as the recommended easy path and `server` as the
   advanced/low-level path. `server`/`php --mount-before-install=./site:/wordpress` against an
   empty host directory can fail with `Error connecting to the SQLite database`; the wp-cli recipe
@@ -146,6 +159,18 @@ Windows gap in the skill's README.
   The first local workflow in the skill must be a bootstrap command that works on a machine with
   Node and an empty project directory. Do **not** document the wp-cli command as day-one setup
   until the bootstrap step has produced `.playground/site-dir`.
+
+  **Mount model (review-3 finding — the seam that broke the composed chain):** `start` on an
+  empty project mounts nothing of the project, and `server`/`php` mount only the recorded site
+  dir — a theme written into the project is invisible to the site unless every `server` AND
+  every wp-cli command carries the same explicit
+  `--mount=./<theme>:/wordpress/wp-content/themes/<slug>`. Divergent mounts fail silently: a
+  one-off wp-cli `theme activate` against a live server lacking the theme mount left the server
+  answering HTTP 200 with an empty body (observed 2026-06-11). Also: `server --login` defaults
+  to **false** (`start` defaults true) — without it the Playwright editor gate hits a login
+  wall. And never read `siteurl` from a Playground DB: it stores a junk ephemeral port; derive
+  the local URL from the recorded server port. All of this is enforced by construction in
+  `playground.sh` (`ensure` records extra mounts, `wp` replays them, `--login` is always set).
 - Local wp-cli (**narrowly verified 2026-06-11; bootstrap precondition added**): the CLI exposes
   no wp-cli command, and the blueprint `wp-cli` step swallows stdout (exit 0, no output). Once a
   Playground site directory has been bootstrapped and recorded, run the phar through Playground's
@@ -162,20 +187,29 @@ Windows gap in the skill's README.
 
   Verified only in the narrower sense: visible stdout and args pass through against an already
   bootstrapped Playground site dir. **Not verified from an empty `./site` mount**; that failed in
-  review. Phase 1 must verify the composed chain against one site dir: bootstrap → ensure server
-  running → wp-cli read/write → editor validation → stop server. Faster fallback (~2s):
+  review. The composed chain (bootstrap → ensure server running → wp-cli read/write → editor
+  validation → stop server) **was run end-to-end 2026-06-11 (review 3)**: it fails as written
+  in markdown (theme invisible, mount-divergence white-screen, login wall) and passes via
+  `exploration2/playground.sh`, which is now the reference implementation Phase 1 re-verifies
+  on all four agents. Faster fallback (~2s):
   `npx @php-wasm/cli wp-cli.phar <command>` from the site root — but only if the site dir is
   self-contained (`wp-content/db.php` SQLite drop-in present). Playground injects SQLite in the
   VFS only, so the drop-in must be installed manually, and the generated `db.php` hardcodes an
   absolute host path — never deploy it.
-- **Open spike question**: concurrent access — a one-off wp-cli process and a running server share
-  one `.ht.sqlite` through independent WASM filesystems. Test whether a concurrent write corrupts,
-  errors, or works; until then the rule is "stop the server before one-off wp-cli writes".
+- **Open spike question (retargeted after review 3)**: the observed concurrent-access failure
+  is **mount divergence**, not SQLite corruption — a one-off wp-cli write with a different mount
+  set silently white-screened the live server, and stopping the server first would not have
+  helped. The shipping rule is therefore "one-off wp-cli carries the same mount set as the
+  running server" (enforced by `playground.sh wp`). The SQLite question stays a spike (review 2
+  already saw one clean concurrent `option update`); if it never corrupts, no stop-the-server
+  rule ships.
 - **Server lifecycle across agents (the Studio-daemon convention)**: the four agents have
   different process semantics (Claude Code has native background tasks; Codex's sandbox may not
   keep backgrounded children alive between commands and blocks network by default; pi's bash is
   synchronous). Studio solves this with a daemon + IPC registry: the server is never a child of
-  any command. The skill replicates both properties as **one convention, no script**:
+  any command. The skill replicates both properties as one convention **shipped as a script**
+  (`playground.sh`, the third determinism exception — three review cycles each found a new bug
+  in the markdown version of this snippet, which is the definition of a script):
 
   The convention is phrased as **"ensure running" (convergent), not "start" (imperative)** —
   agents re-run things blindly, so the recipe must be safe to re-run blindly. This is how
@@ -188,15 +222,20 @@ Windows gap in the skill's README.
   # 3. then start detached and record the registry:
   mkdir -p .playground
   test -f .playground/site-dir  # bootstrap must have run first (see local site bootstrap above)
-  setsid nohup npx @wp-playground/cli server --port=<free-port> \
+  setsid nohup npx @wp-playground/cli server --port=<free-port> --login \
     --mount-before-install="$(cat .playground/site-dir):/wordpress" \
     --wordpress-install-mode=install-from-existing-files-if-needed \
+    --mount=./<theme>:/wordpress/wp-content/themes/<slug> \
     > .playground/server.log 2>&1 &
+  # --login is mandatory (server defaults it to FALSE, unlike start) or wp-admin is unreachable;
+  # the project mount is mandatory or the site never sees the files being authored — record it
+  # so one-off wp-cli replays the identical mount set
   pid=$!
   echo "$pid" > .playground/server.pid
   ps -o pgid= -p "$pid" | tr -d ' ' > .playground/server.pgid
   echo <free-port> > .playground/server.port
-  # 4. poll curl on $(cat .playground/server.port) until ready; on failure read server.log
+  # 4. poll `curl -fs` until ready — plain `curl -s` treats boot-time 502s as success (observed);
+  #    on failure read server.log
   # stop: kill -TERM "-$(cat .playground/server.pgid)" (fallback: kill pid);
   #       verify curl fails and no wp-playground process still owns the recorded port;
   #       rm .playground/server.*
@@ -204,8 +243,9 @@ Windows gap in the skill's README.
 
   The process-group stop is load-bearing. A review reproduced that `kill $(cat
   .playground/server.pid)` killed only the `npx` wrapper while the child `node` Playground server
-  kept serving. The spike must fail the lifecycle if stop leaves `curl` successful or `pgrep -af
-  "wp-playground.*$(cat .playground/server.port)"` non-empty.
+  kept serving. The spike must fail the lifecycle if stop leaves `curl` successful or `pgrep -f
+  "wp-playgroun[d].*$(cat .playground/server.port)"` non-empty (the `[d]` matters: the naive
+  pattern matches the agent's own composite shell command and false-fails — observed).
 
   Ports are **recorded, never fixed and never assumed** — this replaces Telex's "always 8881"
   (which collides across concurrent agents; wp-now still defaults to 8881) and survives
@@ -307,6 +347,20 @@ Windows gap in the skill's README.
      hero composition. The final site may extend below the fold, but the first fold should be
      recognizably descended from the selected preview. If the user skips after seeing options,
      proceed with a single best direction and state that no preview was selected.
+
+  **Agent reality and registered falsifier (added after review 3):** of the four target agents,
+  only Claude Code has documented native parallel subagents; pi's README states "No
+  sub-agents"; Codex/Gemini are unverified — so isolated *sequential* passes are the common
+  case, and true isolation (Telex sends each direction to a separate model call precisely so
+  previews cannot contaminate each other) is impossible inside one context window. Telex's
+  implementation also depends on two backend stages this plan drops: a site-spec pass
+  (`layoutMode` shapes the preview shell) and an in-stream hero-image pipeline (`AI_IMAGE`
+  detection + parallel generation) — without an image policy the previews ship without
+  photography, losing Telex's main distinctiveness axis. **Falsifier:** the Phase 1.5 preview
+  spike A/Bs this workflow against "single best direction, no ceremony" on final-output
+  quality; if the four-preview flow does not win, design-previews.md collapses to one paragraph
+  in design.md ("offer 2–4 written directions for new sites; honor the pick"). Until that spike
+  runs, design-previews.md is **not** written.
 - WP.com MCP (**partially verified 2026-06-11** against wordpress.com/support/mcp, reviewed
   2026-05-20): available on Personal, Premium, Business, and Commerce plans — **free sites
   excluded**; **disabled by default** — the user must enable it account-wide and/or per-site,
@@ -314,10 +368,11 @@ Windows gap in the skill's README.
   theme-file deployment**; tools respect user roles. Spike remainder: enumerate the actual tool
   list per plan, and the exact per-agent connection steps (claude/codex/gemini/pi).
 - WP.com SSH: confirm host names, username format, htdocs layout, what's writable, rsync
-  availability, session limits. SSH/SFTP is believed Business+ only (**unverified**) — confirm,
-  because it makes "deploy a theme" impossible on Free/Personal/Premium plans and the skill must
-  say so rather than let the agent flail. (Verify with a real test site — don't write these
-  from memory.)
+  availability, session limits. SSH/SFTP is Business/Commerce only (**verified against the
+  support page, reviewed 2026-02-11**) — re-confirm against a real site, because it makes
+  "deploy a theme" impossible on Free/Personal/Premium plans and the skill must say so rather
+  than let the agent flail. (Verify the rest with a real test site — don't write these from
+  memory.)
 - Playground vs real hosting differences (PHP extensions, cron, mail) — note honestly.
 
 ### Expected failure points (hypotheses to **test** — graded against the rubric, falsifiable)
@@ -396,7 +451,8 @@ wordpress/
     ├── design.md                   # Design direction + anti-AI-slop rules (Telex
     │                               #   design-direction.md) + screenshot-diagnose-batch-fix loop
     │                               #   (Studio visual-polish, rebuilt on Playwright)
-    ├── design-previews.md          # New-site opt-in workflow: always ask whether the user wants
+    ├── design-previews.md          # GATED on the Phase 1.5 preview spike + falsifier (see
+    │                               #   toolchain spike). New-site opt-in workflow: ask whether the user wants
     │                               #   four directions; if yes, generate 4 text directions,
     │                               #   spawn 4 isolated preview agents, write first-fold
     │                               #   HTML/CSS previews to a temp dir, render a 2x2 local
@@ -424,26 +480,43 @@ wordpress/
 Final reference list is decided by Phase 1 results — merge, drop, or add files based on what the
 bare agent actually got wrong. The list above is the hypothesis.
 
+**Sequencing (the gate rule, applied):** local-sites, block-markup, themes-and-patterns, and
+design can be written after Phase 1 core. wordpress-com, deploy, images-media, and
+backups-and-safety depend on Phase 1.5 items (tasks 4–8, MCP enumeration, real-site SSH
+verification, the image policy) and are written only after those run. design-previews is gated
+on the preview spike's falsifier.
+
 ### SKILL.md design
 
 - Frontmatter `description` triggers on: WordPress site creation/editing, themes, blocks,
   Gutenberg, WordPress.com, wp-cli, Playground, deploying WordPress.
 - Body (short): what the skill covers, the routing table (task → reference), and the safety rules:
   - Local sites are disposable; remote sites are not.
-  - For new sites/themes or material redesigns, ask whether the user wants four design
-    directions/previews before implementation; if yes, pause final generation until selection.
+  - For new sites/themes or material redesigns, offer design directions before implementing
+    (the full four-preview workflow ships only if its Phase 1.5 falsifier passes).
   - Backup (db export + changed files, copied off-host) before any destructive remote operation;
     destructive remote recipes refuse to continue unless given a backup manifest path.
   - Never edit WordPress core. Confirm production writes. Dry-run search-replace first.
   - Always stop local servers you started.
-- No wrapper scripts for normal composition. Two mandatory exceptions, both determinism-as-safety:
-  (1) `scripts/wpcom-backup.sh` creates a backup manifest containing target site, timestamp,
-  database export path, changed-files archive path, off-host copy location, and command log; every
-  destructive remote recipe consumes that manifest and refuses to write without it. (2) The pinned
-  CommonJS block checker ships **verbatim** as `scripts/validate-blocks.cjs` — its package
-  versions, jsdom shims, validation/normalization/lint distinctions, and module format are too
-  brittle to improvise. The design-preview gallery is a disposable generated artifact in `/tmp`,
-  not a third required script. Nothing else.
+  - Local workflows require a POSIX shell (macOS/Linux/WSL). Native Windows is unsupported in
+    v1 — stated here, where the agent reads it, not only in a README.
+- No wrapper scripts for normal composition. Three mandatory exceptions, all
+  determinism-as-safety: (1) `scripts/wpcom-backup.sh` creates a backup manifest (five lines:
+  target site, timestamp, db-export path, changed-files-archive path, off-host copy location)
+  plus a command log; every destructive remote recipe consumes that manifest and — because a
+  bare path is satisfiable by `touch` — verifies the artifacts it points at (`test -s` each)
+  before writing. Below Business plan there is no SSH/wp-cli, so this script cannot run:
+  MCP/REST-channel destructive ops instead require a content-level backup (REST export of the
+  affected posts to a local file) — runnable on Personal, honest about what it protects.
+  (2) The pinned CommonJS block checker ships **verbatim** as `scripts/validate-blocks.cjs`
+  with its lockfile — package versions, jsdom shims, validation/normalization/lint distinctions,
+  and module format are too brittle to improvise. (3) `scripts/playground.sh`
+  (bootstrap/ensure/wp/stop) — the lifecycle convention shipped as a script: three review
+  cycles each found a new bug in the markdown version (wrapper-pid kill, missing `--login`,
+  mount divergence, 502-tolerant readiness poll, self-matching pgrep), and mount consistency
+  between the server and one-off wp-cli is enforced by construction; the fallback ladder folds
+  into it as a tmux branch. The design-preview gallery is a disposable generated artifact in
+  `/tmp`, not a fourth required script. Nothing else.
 
 ### Content filter (applies to every extracted paragraph)
 
@@ -490,7 +563,7 @@ over stock npx tools — the user installs nothing. Current mapping:
 
 | Studio tool | Skill equivalent | Status |
 |---|---|---|
-| site lifecycle, `studio wp` | `npx @wp-playground/cli` bootstrap + recorded `.playground/site-dir` + wp-cli phar recipe | bootstrap chain spike (empty-dir recipe failed) |
+| site lifecycle, `studio wp` | `playground.sh` bootstrap/ensure/wp/stop over `npx @wp-playground/cli` | composed chain verified 2026-06-11 (review 3); pin version + 4-agent re-run in Phase 1 |
 | server daemon + IPC registry | detached start + site-dir state files (`.playground/{pid,pgid,port,log}`); stop by process group and verify no server remains | spike: cross-turn survival + stop on all 4 agents |
 | `take_screenshot` | `npx playwright screenshot` | verified |
 | `validate_and_fix_blocks` | pinned node validator/normalizer/lint + Playwright editor gate for all block content | node checker narrowly verified; lint + editor gate spike |
@@ -500,7 +573,7 @@ over stock npx tools — the user installs nothing. Current mapping:
 | `wpcom_request` / OAuth | REST + application password, or WP.com MCP | degrades; auth is user-driven — needs bootstrap docs |
 | pull/push site | rsync over SSH + deploy.md sequence | degrades; Business+ plan only |
 | preview sites | `build-snapshot` + Playground blueprint URL (spike) or real staging site | nearest miss |
-| daemon-mediated wp-cli | use recorded `.playground/site-dir`; stop server by process group before one-off wp-cli writes until concurrency spike resolves it | workaround until concurrency spike |
+| daemon-mediated wp-cli | `playground.sh wp` — same site dir and same mount set as the running server, by construction | verified 2026-06-11; SQLite spike still open |
 | annotations, `studio_present`, `ask_user_question` | native agent interaction | skip — product UX, not knowledge |
 
 Tools with no entry here (`need_for_speed`, `rank_me_up`, taxonomy scripts) are post-v1 skill
@@ -512,6 +585,9 @@ candidates, mirroring the Low-priority extraction row.
 
 1. Re-run the Phase 1 eval tasks **with the skill** on each agent (claude, codex, gemini, pi).
    Pass = the failure points from Phase 1 are fixed; bare-agent strengths are not degraded.
+   The rubric records **turns and wall-clock per task, bare vs skilled**: a binary pass that
+   costs materially more (lifecycle ceremony, validator runs, design questions on tasks that
+   needed none) is a regression, not a pass.
 2. Design-preview flow on at least two agents: "Build a landing-page theme for a coffee shop",
    answer yes to design directions, verify the agent produces four written directions, spawns or
    cleanly simulates four isolated preview agents, writes four static first-fold previews plus a
@@ -535,8 +611,9 @@ practice) — not preemptively.
 - **WP.com MCP surface** — confirmed content-plus-settings flavored (support page, 2026-05-20):
   REST/SSH must carry site management; decision table must reflect reality, not the support
   page's marketing.
-- **Plan gating is the day-one wall** — MCP needs Personal+, SSH/SFTP believed Business+
-  (unverified). The largest WP.com segment (Free/Personal) has **no theme deployment path at
+- **Plan gating is the day-one wall** — MCP needs Personal+, SSH/SFTP is Business/Commerce
+  (support pages verified; real-site confirmation pending). The largest WP.com segment
+  (Free/Personal) has **no theme deployment path at
   all**; the skill's correct behavior there is a refusal with options, and bootstrap friction
   (enable MCP, connect client, SSH keys) is user-driven — wordpress-com.md must lead with the
   plan-capability matrix and click-by-click bootstrap, or eval tasks 7–8 fail regardless of
