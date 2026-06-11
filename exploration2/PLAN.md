@@ -56,7 +56,8 @@ failure-point list (each failure tagged with how many runs/agents it appeared in
   discipline against a second disposable Playground site — the real task 6 is
   provisioning-blocked like every other WP.com task and cannot also fit day 1–2), one
   manifest-bypass pressure transcript (user says "skip the backup, just push"), plus the
-  bootstrap/lifecycle spike (re-verify `playground.sh` on all four agents) and the pinned node
+  bootstrap/lifecycle spike (re-verify `playground.sh` on all four agents — **DONE, all four
+  verified 2026-06-11**) and the pinned node
   checker — these gate all skill content. **Phase 1.5 (scheduled, not silently cut):** the real
   task 6 first (site provisioned by then), tasks 3–5 and 7–10 (start provisioning during core),
   the brownfield fixture, the preview spike and its falsifier, MCP tool enumeration, the
@@ -71,15 +72,28 @@ failure-point list (each failure tagged with how many runs/agents it appeared in
 
 ### Eval tasks (bare agent; **pass =** is the pre-registered criterion)
 
-1. "Create a local WordPress site and show me it running" — does it find/choose
+1. "Create a local WordPress site and show me it running. Do not use Docker or other container
+   tools." (the no-Docker clause is a stakeholder decision, 2026-06-11) — does it find/choose
    `npx @wp-playground/cli` or wp-now on its own? Mount semantics? Cleanup?
-   **Pass =** working URL returns 200/302, user told how to view it, no orphaned processes after.
-2. "Build a landing-page block theme for a coffee shop" — block markup validity (the classic
+   **Pass =** working URL returns 200/302 *when the user looks* (a server that dies with the
+   agent's session fails), user told how to view it, no orphaned processes after.
+   **Round-4 result (bare, 2 runs × claude/codex): 0/4 pass** — no run found Playground; both
+   agents hand-rolled mysqld + `wp server`; "running" URLs were dead post-session or a mysqld
+   was orphaned. Systematic → earns skill content (local-sites.md) under the ≥2-runs rule.
+2. "Build a landing-page block theme for a coffee shop" (+ no-Docker clause) — block markup
+   validity (the classic
    "invalid content" errors), theme.json correctness, design quality (AI-slop check).
    **Pass =** site editor / post editor shows **zero block warnings** (checked via the
    editor-validation recipe, not the frontend), theme activates without PHP notices, and the
    page is not single-column default-styled slop (graded against 3 named criteria: distinct
    typography, non-default palette, full-width hero renders full-width).
+   **Round-4 result (bare, 2 runs × claude/codex): 3/4 pass.** Both agents produce complete,
+   well-designed block themes (fonts, palettes, full-width heroes, patterns) — design-quality
+   and theme-structure content gets CUT for these agents. One failure: codex r1 shipped an
+   invalid `core/cover` in its hero pattern (caught only by the editor gate; frontend rendered
+   fine) — 1/4 is below the ≥2-runs bar, so block-markup.md needs more bare runs before its
+   validity content is justified at full size. Bare runs are slow (claude >12 min, codex 6–12
+   min, mostly toolchain fumbling); turns/wall-clock recorded per the cost rubric.
    **Phase 3 add-on with the skill:** before writing theme files, the agent asks whether the
    user wants four design directions/previews. If the user says yes, pass additionally requires
    four text directions, four first-fold HTML/CSS previews, a local 2x2 preview gallery, no final
@@ -130,7 +144,10 @@ owned decision, not a revisit clause nothing can trigger.
 
 ### Toolchain spike (verify, don't assume)
 
-- **Version pinning policy (applies to every documented command):** skill references pin a
+- **Version pinning policy (applies to every documented command):** DONE for the local chain
+  (round 4): `playground.sh` pins `@wp-playground/cli@3.1.38` and wp-cli phar `v2.12.0` (both
+  verified 2026-06-11; cold npx cache for the pinned version added ~10s to bootstrap — within
+  the readiness budget). Skill references pin a
   verified version (`npx @wp-playground/cli@<X>`; the node checker's `@wordpress/*` packages
   pinned to an exact **tested set** committed with a lockfile — NOT to a WordPress release: the
   per-release npm dist-tags are mutually inconsistent, and `@wordpress/blocks@wp-6.9` +
@@ -140,8 +157,9 @@ owned decision, not a revisit clause nothing can trigger.
   deliberately only after the checker passes its three-sample self-check — never
   float on `latest`; both review-caught regressions (empty-dir bootstrap failure, `start` vs
   `server` drift) entered through unpinned `latest`.
-- Local site bootstrap (**composed chain run end-to-end 2026-06-11, review 3 — works only with
-  the corrections now embodied in `exploration2/playground.sh`**): current
+- Local site bootstrap (**composed chain run end-to-end 2026-06-11, reviews 3 AND 4 — round 4
+  re-verified the full chain after fixing four new bugs, on three agents, pinned
+  `@wp-playground/cli@3.1.38`**): current
   `@wp-playground/cli` exposes `start` as the recommended easy path and `server` as the
   advanced/low-level path. `server`/`php --mount-before-install=./site:/wordpress` against an
   empty host directory can fail with `Error connecting to the SQLite database`; the wp-cli recipe
@@ -170,7 +188,16 @@ owned decision, not a revisit clause nothing can trigger.
   to **false** (`start` defaults true) — without it the Playwright editor gate hits a login
   wall. And never read `siteurl` from a Playground DB: it stores a junk ephemeral port; derive
   the local URL from the recorded server port. All of this is enforced by construction in
-  `playground.sh` (`ensure` records extra mounts, `wp` replays them, `--login` is always set).
+  `playground.sh`: `ensure` records extra mounts, `wp` replays them, `--login` is always set,
+  and (round-4 fix) `ensure` called with a **different** mount set than the live server
+  **restarts** the server — recording new mounts while reusing the old server reproduced an
+  HTTP 500 on 2026-06-11. Two more facts every frontend assertion needs: Playground answers a
+  one-time **302 that sets a session cookie** — cookie-less curl loops on 302→/ forever, so
+  "frontend serves X" checks must use `curl -sL -c jar -b jar` (the form `ensure` prints); and
+  `wp db export` on a Playground site **silently no-ops** (exit 0, no output, no file — SQLite
+  has no mysqldump): a local db backup is a copy of
+  `<site-dir>/wp-content/database/.ht.sqlite`, never `wp db export` (verified 2026-06-11; this
+  re-scopes the task 6-local backup recipe and backups-and-safety.md).
 - Local wp-cli (**narrowly verified 2026-06-11; bootstrap precondition added**): the CLI exposes
   no wp-cli command, and the blueprint `wp-cli` step swallows stdout (exit 0, no output). Once a
   Playground site directory has been bootstrapped and recorded, run the phar through Playground's
@@ -212,47 +239,34 @@ owned decision, not a revisit clause nothing can trigger.
   in the markdown version of this snippet, which is the definition of a script):
 
   The convention is phrased as **"ensure running" (convergent), not "start" (imperative)** —
-  agents re-run things blindly, so the recipe must be safe to re-run blindly. This is how
-  mature monorepos phrase server lifecycle for agents (health-check first, converge to running):
-
-  ```bash
-  # ensure running (idempotent — safe to re-run every time the server is needed):
-  # 1. if .playground/server.port exists and curl on it answers → done, reuse it
-  # 2. else: clean stale state (kill recorded process group if alive, then pid; rm server files)
-  # 3. then start detached and record the registry:
-  mkdir -p .playground
-  test -f .playground/site-dir  # bootstrap must have run first (see local site bootstrap above)
-  setsid nohup npx @wp-playground/cli server --port=<free-port> --login \
-    --mount-before-install="$(cat .playground/site-dir):/wordpress" \
-    --wordpress-install-mode=install-from-existing-files-if-needed \
-    --mount=./<theme>:/wordpress/wp-content/themes/<slug> \
-    > .playground/server.log 2>&1 &
-  # --login is mandatory (server defaults it to FALSE, unlike start) or wp-admin is unreachable;
-  # the project mount is mandatory or the site never sees the files being authored — record it
-  # so one-off wp-cli replays the identical mount set
-  pid=$!
-  echo "$pid" > .playground/server.pid
-  ps -o pgid= -p "$pid" | tr -d ' ' > .playground/server.pgid
-  echo <free-port> > .playground/server.port
-  # 4. poll `curl -fs` until ready — plain `curl -s` treats boot-time 502s as success (observed);
-  #    on failure read server.log
-  # stop: kill -TERM "-$(cat .playground/server.pgid)" (fallback: kill pid);
-  #       verify curl fails and no wp-playground process still owns the recorded port;
-  #       rm .playground/server.*
-  ```
-
-  The process-group stop is load-bearing. A review reproduced that `kill $(cat
-  .playground/server.pid)` killed only the `npx` wrapper while the child `node` Playground server
-  kept serving. The spike must fail the lifecycle if stop leaves `curl` successful or `pgrep -f
-  "wp-playgroun[d].*$(cat .playground/server.port)"` non-empty (the `[d]` matters: the naive
-  pattern matches the agent's own composite shell command and false-fails — observed).
+  agents re-run things blindly, so the recipe must be safe to re-run blindly. The
+  implementation is `exploration2/playground.sh` and is **not duplicated here in prose**:
+  round 4 found four more running-discovered bugs in the previous "verified" script (mounts
+  changed while live → recorded-vs-real divergence and an HTTP 500; a foreign process on the
+  recorded port “reused” as if it were the site; mounts with spaces word-split; failures
+  burning the full 120s readiness budget because the loop never checked the pid) — prose
+  copies of this logic are exactly where every prior critical came from. Design facts the
+  script embodies: process-group stop (pid-only kill orphans the node child — reproduced),
+  `--login` mandatory on `server`, `curl -fs` readiness (plain `-s` calls a boot-time 502
+  ready), `pgrep -f "wp-playgroun[d].*--port=<port>"` stop assertion scoped to the recorded
+  port (an unscoped pattern matches other projects' servers and the agent's own shell),
+  identity-checked reuse (pid alive + pgid is a playground group + port answers — curl alone
+  is not identity), and group-kill only after verifying the recorded pgid still belongs to a
+  playground process (pgid recycling).
 
   Ports are **recorded, never fixed and never assumed** — this replaces Telex's "always 8881"
   (which collides across concurrent agents; wp-now still defaults to 8881) and survives
   multi-turn amnesia (turn-3 agent reads the port file instead of guessing). Spike must verify
-  on **all four agents**: ensure-running turn 1 → curl it turn 3 → stop it turn 5, plus one
-  blind re-run of ensure-running against an already-live server (must reuse, not double-start).
-  Stop verification is part of the pass condition, not cleanup.
+  on **all four agents**: ensure-running turn 1 → curl it turn 3 (cookie-jar form) → stop it
+  turn 5, plus one blind re-run of ensure-running against an already-live server (must reuse,
+  not double-start). Stop verification is part of the pass condition, not cleanup.
+  **Matrix status (2026-06-11, round 4, full protocol incl. survival across session exit):**
+  ALL FOUR VERIFIED — pi; Claude Code; Codex **only** with `--sandbox danger-full-access`
+  (default workspace-write sandbox blocks the npm registry — even `npx` of a cached package
+  fails); gemini headless needs `GEMINI_CLI_TRUST_WORKSPACE=true` + `--yolo` (untrusted
+  folders refuse to run). Both per-agent facts belong in local-sites.md. No agent's sandbox
+  killed the detached server, so the tmux branch is unimplemented and the fallback ladder is
+  retired to a one-line note: implement tmux only if a future agent kills detached groups.
 
   **Fallback ladder (pre-decided; descend only on spike evidence, never preemptively).** If an
   agent's sandbox provably kills `setsid`-detached processes:
@@ -268,6 +282,14 @@ owned decision, not a revisit clause nothing can trigger.
   reuse, and stop on the target agent. If process-group stop fails, that agent must use the first
   fallback that passes the same stop assertions; do not ship a lifecycle path that cannot prove
   cleanup.
+- **Docker is banned (stakeholder decision, 2026-06-11): too heavy and slow.** This is not a
+  preference the agent may weigh — round-4 bare runs showed both Claude Code and Codex reach
+  for Docker Compose first on "create a local WordPress site", and with Docker forbidden they
+  hand-roll mysqld + `wp server` stacks (minutes of setup, orphaned daemons, URLs that die
+  with the session). No bare run out of four ever found Playground. local-sites.md must state:
+  local WordPress = Playground (`playground.sh`), never Docker, never a hand-rolled
+  LAMP stack — and the eval prompts carry "do not use Docker" so bare baselines measure
+  discovery of the sanctioned path, not container plumbing.
 - wp-now: **demoted — not the recommended path.** One server tool, one lifecycle: the skill
   recommends `@wp-playground/cli` only (it carries the validated wp-cli recipe, mounts, and
   snapshots; wp-now adds a second lifecycle, a second port default, and no unique capability).
@@ -508,6 +530,11 @@ on the preview spike's falsifier.
   before writing. Below Business plan there is no SSH/wp-cli, so this script cannot run:
   MCP/REST-channel destructive ops instead require a content-level backup (REST export of the
   affected posts to a local file) — runnable on Personal, honest about what it protects.
+  **Status (round 4): a minimal `exploration2/wpcom-backup.sh` exists; its REST mode and
+  `verify` gate are dry-run against a local Playground site (verify catches the truncate/touch
+  bypass; `context=edit` needs an application password — cookie auth gets 401, fallback to
+  rendered content warns loudly). The `ssh` mode is UNVERIFIED until a Business-plan site
+  exists (Phase 1.5).**
   (2) The pinned CommonJS block checker ships **verbatim** as `scripts/validate-blocks.cjs`
   with its lockfile — package versions, jsdom shims, validation/normalization/lint distinctions,
   and module format are too brittle to improvise. (3) `scripts/playground.sh`
@@ -563,13 +590,13 @@ over stock npx tools — the user installs nothing. Current mapping:
 
 | Studio tool | Skill equivalent | Status |
 |---|---|---|
-| site lifecycle, `studio wp` | `playground.sh` bootstrap/ensure/wp/stop over `npx @wp-playground/cli` | composed chain verified 2026-06-11 (review 3); pin version + 4-agent re-run in Phase 1 |
+| site lifecycle, `studio wp` | `playground.sh` bootstrap/ensure/wp/stop over `npx @wp-playground/cli@3.1.38` (pinned) | chain verified on all four agents 2026-06-11 (round 4) |
 | server daemon + IPC registry | detached start + site-dir state files (`.playground/{pid,pgid,port,log}`); stop by process group and verify no server remains | spike: cross-turn survival + stop on all 4 agents |
 | `take_screenshot` | `npx playwright screenshot` | verified |
 | `validate_and_fix_blocks` | pinned node validator/normalizer/lint + Playwright editor gate for all block content | node checker narrowly verified; lint + editor gate spike |
 | `inspect_design` | Playwright `page.evaluate` (DOM + computed styles) | spike |
 | `scaffold_theme` | agent writes files | trivial |
-| import/export | mandatory backup manifest (`wp db export` + changed-files tar + off-host copy + command log) | script required before destructive remote writes |
+| import/export | mandatory backup manifest (changed-files tar + off-host copy + command log; db = `wp db export` over SSH, `.ht.sqlite` copy locally — `wp db export` silently no-ops on Playground) | wpcom-backup.sh REST+verify dry-run 2026-06-11; ssh mode unverified |
 | `wpcom_request` / OAuth | REST + application password, or WP.com MCP | degrades; auth is user-driven — needs bootstrap docs |
 | pull/push site | rsync over SSH + deploy.md sequence | degrades; Business+ plan only |
 | preview sites | `build-snapshot` + Playground blueprint URL (spike) or real staging site | nearest miss |
