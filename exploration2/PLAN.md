@@ -52,10 +52,43 @@ Simultaneously verify the toolchain claims the skill will rely on. Output:
 
 ### Toolchain spike (verify, don't assume)
 
-- `npx @wp-playground/cli server`: exists? `--mount` for live-editing a theme dir? wp-cli access?
+- `npx @wp-playground/cli server`: exists? `--mount` for live-editing a theme dir?
   persistence? startup time/size?
+- Local wp-cli (**partially verified 2026-06-11**): the CLI exposes no wp-cli command, and the
+  blueprint `wp-cli` step swallows stdout (exit 0, no output). The working recipe is running the
+  phar through Playground's `php` command against a host-persisted site:
+
+  ```bash
+  curl -sLO https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
+  npx @wp-playground/cli php \
+    --mount-before-install=./site:/wordpress \
+    --wordpress-install-mode=install-from-existing-files-if-needed \
+    --mount=.:/host -- /host/wp-cli.phar <command>
+  ```
+
+  Verified: visible stdout, args pass through, state persists across invocations (~5s/run), and
+  the same mounted site dir serves `server`. Faster fallback (~2s): `npx @php-wasm/cli
+  wp-cli.phar <command>` from the site root — but only if the site dir is self-contained
+  (`wp-content/db.php` SQLite drop-in present). Playground injects SQLite in the VFS only, so the
+  drop-in must be installed manually, and the generated `db.php` hardcodes an absolute host path —
+  never deploy it.
+- **Open spike question**: concurrent access — a one-off wp-cli process and a running server share
+  one `.ht.sqlite` through independent WASM filesystems. Test whether a concurrent write corrupts,
+  errors, or works; until then the rule is "stop the server before one-off wp-cli writes".
 - wp-now: still maintained? Good enough as the simpler fallback?
 - `npx playwright`: minimal footprint for screenshots (browser download, headless flags).
+- **Editor-side block validation recipe**: Studio's `validate_and_fix_blocks` is not backend
+  magic — it opens `post-new.php` in a browser and runs `wp.blocks.parse()` +
+  `wp.blocks.validateBlock()` via `page.evaluate` (see Studio
+  `apps/cli/ai/block-validator.ts`; "the same save-function comparison the Gutenberg editor
+  performs on load"), with auto-fix = the editor's own re-serialization. Spike: reproduce this
+  as a Playwright snippet against a Playground site (auto-login makes wp-admin reachable).
+  If it works, it closes the worst silent-failure gap — invalid blocks render fine on the
+  frontend and only break in the editor, so screenshot-based verification alone cannot catch
+  them.
+- **Preview/share path**: Studio's WP.com preview sites are backend-tied and not replicable.
+  Spike whether `build-snapshot` + a Playground blueprint URL is a good-enough shareable
+  preview; otherwise "previews" = deploy to a real staging site.
 - WP.com MCP (https://wordpress.com/support/mcp/): actual tool surface, auth flow, per-agent setup.
 - WP.com SSH: confirm host names, username format, htdocs layout, what's writable, rsync
   availability, session limits. (Verify with a real test site — don't write these from memory.)
@@ -69,6 +102,9 @@ Simultaneously verify the toolchain claims the skill will rely on. Output:
 - WP.com platform facts: `sftp.wp.com`, username format, read-only areas, plan gating,
   Photon/CDN caching, media files SFTP'd into uploads aren't in the media library.
 - Server lifecycle hygiene: background processes left running, port conflicts.
+- Local wp-cli: bare agent assumes a working `wp` binary locally; Playground has none — it must
+  use the phar-over-`php` recipe (confirmed: blueprint `wp-cli` step exits 0 with no stdout —
+  a silent failure the skill must preempt).
 - Deployment safety: skipping backups, running search-replace without dry-run.
 
 ---
@@ -80,9 +116,14 @@ wordpress/
 ├── SKILL.md                        # Thin router + non-negotiable safety rules
 └── references/                     # Written against Phase 1 failure list; candidates below
     ├── local-sites.md              # Playground/wp-now: bootstrap, mount, blueprints, lifecycle,
-    │                               #   runtime validation loop, Playground-vs-production diffs
+    │                               #   wp-cli via `php -- /host/wp-cli.phar` recipe (incl.
+    │                               #   server-vs-one-off concurrency rule), runtime validation
+    │                               #   loop, Playground-vs-production diffs
     ├── block-markup.md             # Block HTML validity + layout cascade (Telex block-html.md
     │                               #   merged with Studio block-content; the highest-value content)
+    │                               #   + editor-validation loop: Playwright → post-new.php →
+    │                               #   wp.blocks.validateBlock() (the Studio harness recipe —
+    │                               #   mandatory before declaring theme/pattern work done)
     ├── themes-and-patterns.md      # Theme structure, theme.json v3, fonts, patterns, navigation,
     │                               #   query loops (Telex creating-themes + generating-patterns
     │                               #   + navigation.md + query-loop.md, filtered)
@@ -149,6 +190,31 @@ bare agent actually got wrong. The list above is the hypothesis.
 | Med | Telex `generating-images` (prompt/aspect conventions, `-v2` versioning) | images-media.md |
 | Low | Studio `plugin-recommendations`, `rank-me-up`, `need-for-speed`, `taxonomist` | possible follow-up skills, post-v1 |
 | Skip | Studio `annotate`, `site-spec`, `studio-cli`; Telex output-style/subagent/build rules | product behavior, not knowledge |
+
+---
+
+### Studio harness parity map (recreate as recipes, not tools)
+
+The Studio CLI harness (`apps/cli/ai/tools/`) is the closest existing product to what this skill
+targets. Principle: every harness tool the skill needs must collapse into a documented recipe
+over stock npx tools — the user installs nothing. Current mapping:
+
+| Studio tool | Skill equivalent | Status |
+|---|---|---|
+| site lifecycle, `studio wp` | `npx @wp-playground/cli` + wp-cli phar recipe | verified |
+| `take_screenshot` | `npx playwright screenshot` | verified |
+| `validate_and_fix_blocks` | Playwright → `wp.blocks.validateBlock()` in editor | spike (recipe identified) |
+| `inspect_design` | Playwright `page.evaluate` (DOM + computed styles) | spike |
+| `scaffold_theme` | agent writes files | trivial |
+| import/export | `wp db export` + tar | recipe |
+| `wpcom_request` / OAuth | REST + application password, or WP.com MCP | degrades; auth is user-driven — needs bootstrap docs |
+| pull/push site | rsync over SSH + deploy.md sequence | degrades; Business+ plan only |
+| preview sites | `build-snapshot` + Playground blueprint URL (spike) or real staging site | nearest miss |
+| daemon-mediated wp-cli | rule: stop server before one-off wp-cli writes | workaround until concurrency spike |
+| annotations, `studio_present`, `ask_user_question` | native agent interaction | skip — product UX, not knowledge |
+
+Tools with no entry here (`need_for_speed`, `rank_me_up`, taxonomy scripts) are post-v1 skill
+candidates, mirroring the Low-priority extraction row.
 
 ---
 
