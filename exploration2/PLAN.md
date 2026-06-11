@@ -58,8 +58,12 @@ failure-point list (each failure tagged with how many runs/agents it appeared in
   manifest-bypass pressure transcript (user says "skip the backup, just push"), plus the
   bootstrap/lifecycle spike (re-verify `playground.sh` on all four agents — **DONE, all four
   verified 2026-06-11**) and the pinned node
-  checker — these gate all skill content. **Phase 1.5 (scheduled, not silently cut):** the real
-  task 6 first (site provisioned by then), tasks 3–5 and 7–10 (start provisioning during core),
+  checker — these gate all skill content. **Phase 1.5 (scheduled, not silently cut — and
+  re-scoped 2026-06-11: all WP.com-dependent items are deferred until WP.com work starts; test
+  sites will NOT be provisioned during core. The initial implementation ships the local-first
+  half only: SKILL.md + local-sites, block-markup, themes-and-patterns, design + the three
+  scripts):** the real
+  task 6 first (when a site exists), tasks 3–5 and 7–10 (4–8 are WP.com-gated),
   the brownfield fixture, the preview spike and its falsifier, MCP tool enumeration, the
   image-generation degradation policy (one page: asset sources, placeholders, naming, alt text,
   Media-Library replacement), and the mid-session safety transcript. No reference file ships
