@@ -22,6 +22,7 @@ Run `scripts/playground.sh` from the project directory (its state lives in `./.p
 | Write or edit ANY block markup (templates, parts, patterns, post content) | `references/block-markup.md` |
 | Build a theme: structure, theme.json, fonts, patterns, navigation, query loops | `references/themes-and-patterns.md` |
 | New site / redesign (browser design previews + selection); polish rendered output | `references/design.md` |
+| Images for a site: generate (AI via the user's Telex login), add, or remove | `references/images-media.md` |
 | Anything destructive on a site the user calls production | `references/backups-and-safety.md` |
 
 ## Non-negotiable rules
@@ -52,3 +53,8 @@ Run `scripts/playground.sh` from the project directory (its state lives in `./.p
 7. **For new sites/redesigns, users choose from rendered HTML previews in a browser**
    (`references/design.md`) — never from text directions, terminal option lists, or ASCII
    mockups.
+8. **Image generation needs the user's consent before any markup is written.** Check
+   `.playground/images.json` first and follow `references/images-media.md`: ask once —
+   naming the local token and the browser login — respect a recorded "no" across sessions
+   with a deliberately imageless design, and never let generation failures or a decline
+   block site creation.

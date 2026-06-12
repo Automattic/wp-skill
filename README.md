@@ -9,8 +9,9 @@ The skill lives in [`wordpress/`](wordpress/) and covers:
 - **Block themes and patterns** — theme structure, `theme.json`, fonts, patterns, navigation, query loops.
 - **Design workflow** — for new sites or redesigns, users pick from rendered HTML previews in a browser, never from text descriptions or ASCII mockups.
 - **Backup discipline** — destructive operations on production sites require a verified backup manifest first.
+- **Image generation** — real AI-generated images through the user's own Telex login (WordPress.com auth, one-time browser device flow) via `scripts/telex-images.mjs`: informed consent before any image markup, deliberately imageless designs on decline, placeholder-based resume on failure.
 
-Deploying to WordPress.com is not yet supported — the skill is local-first.
+Deploying to WordPress.com is not yet supported — the skill is otherwise local-first; image generation is the one feature that calls out (to the Telex API, as the user).
 
 ## Layout
 
@@ -22,9 +23,11 @@ wordpress/
 │   ├── block-markup.md
 │   ├── themes-and-patterns.md
 │   ├── design.md
-│   └── backups-and-safety.md
+│   ├── backups-and-safety.md
+│   └── images-media.md
 └── scripts/
     ├── playground.sh        # Local WordPress Playground lifecycle + wp-cli
+    ├── telex-images.mjs     # AI image generation via Telex (device-flow auth)
     ├── wpcom-backup.sh      # Backup helper
     └── checker/             # Block validation tooling
         ├── validate-blocks.cjs
