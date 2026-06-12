@@ -1,0 +1,17 @@
+{
+  "name": "wp-skill-checker",
+  "private": true,
+  "description": "Pinned block validator/normalizer/lint + Playwright editor gate. Versions are a TESTED SET (verified 2026-06-11), NOT WP release dist-tags - wp-6.9 dist-tags crash (review 3 C2), and Telex's 15.15.0 set crashes under npm re-resolution (nested duplicate @wordpress/blocks; works only under their pnpm lockfile). Overrides force a single @wordpress/blocks. Approximates WP trunk ~6.9+. Bump only after `npm run self-check` passes.",
+  "scripts": {
+    "self-check": "node validate-blocks.cjs --self-check"
+  },
+  "dependencies": {
+    "@wordpress/block-library": "9.48.0",
+    "@wordpress/blocks": "15.21.0",
+    "jsdom": "29.1.1",
+    "playwright": "1.60.0"
+  },
+  "overrides": {
+    "@wordpress/blocks": "15.21.0"
+  }
+}
