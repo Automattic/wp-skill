@@ -329,3 +329,38 @@ themes mounted side by side, both passing activation; editor gate = the skill's 
   in the `alt` attribute inside pattern PHP files (adapted Telex contract: `.png` not
   `.jpg`, no `theme:./assets/` prefix). Evidence: this section; artifacts at
   /tmp/spike3-assets, /tmp/spike-images.
+
+## Implementation verification (2026-06-12, per HANDOFF-images.md checklist)
+
+Bench: real Playground site (`/tmp/spike3-assets`, playground.sh), local Telex dev server
+(same environment deviation as the spikes; staging re-run still pending).
+
+1. **Happy path: PASS.** `verify-theme` with 3 markers (cover hero landscape; two grid
+   images square — both src/alt attribute orders) → editor gate PASS with markers in place
+   (3 items) → `generate --files` → 3 real PNGs at requested aspects (1408x768, 1024x1024 ×2),
+   zero markers left, alts human, all three images served by the live site (cookie-jar curl,
+   PNG magic verified on the wire), re-run = "No AI_IMAGE markers found" exit 0, no
+   token-shaped strings in any output or file (grep eyJ: clean).
+2. **Decline path: mechanics PASS; conversational flow deferred to Phase 3.**
+   `.playground/images.json` write/read roundtrip verified; the consent-before-markup rule,
+   no-re-ask rule and imageless-design rule are in SKILL.md bullet 8 + images-media.md.
+   Whether agents *follow* them is the Phase 3 eval (task 3a in PLAN.md), not unit-testable.
+3. **Failure-after-consent: PASS.** New marker + bogus `telex_base_url` → network failure →
+   marker KEPT, aspect-correct gray placeholder written AND served by the live site
+   (1024x1024, script-tagged), resume instructions printed, exit 1. Resume with real config →
+   placeholder replaced by real image, alt humanized, exit 0. Also verified during script
+   testing: 3-marker batch all-placeholder + full resume; 401 mid-batch stops without
+   attempting the rest; moderation-bait 502 copy; skip-exists rewrites alt with zero API calls.
+4. **Auth lifecycle: PASS.** Server-side revoke (`/auth/logout`, JWT-as-cookie) → `status`
+   REJECTED exit 2 with exact re-auth command → that command (`telex-images.mjs auth`) ran
+   headless, user approved in browser, token stored by the script itself (700/600 verified,
+   no token in stdout) → `status` valid → generate 200 (1024x1024).
+5. **SKILL.md size: 60 lines / 4.0 KB** (was 54 / 3.5 KB before images) — one routing row +
+   one rule bullet, description frontmatter unchanged. images-media.md: 124 lines, in line
+   with the other references (60–151).
+
+Open follow-ups (flagged, not worked around): re-run spike 1 + happy path against staging
+`ai-w0.a8c.com` when its deploy answers (needs the a8c SOCKS proxy from this machine);
+endpoint-owner gaps unchanged (attribution header, prompt cap, 422 moderation split, jpg
+option); script's DEFAULT_BASE_URL is staging — production is a config swap; Phase 3 agent
+evals cover the conversational consent/decline/no-re-ask paths.
