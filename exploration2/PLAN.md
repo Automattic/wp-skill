@@ -65,8 +65,8 @@ failure-point list (each failure tagged with how many runs/agents it appeared in
   scripts):** the real
   task 6 first (when a site exists), tasks 3–5 and 7–10 (4–8 are WP.com-gated),
   the brownfield fixture, the preview spike and its falsifier, MCP tool enumeration, the
-  image-generation degradation policy (one page: asset sources, placeholders, naming, alt text,
-  Media-Library replacement), and the mid-session safety transcript. No reference file ships
+  image-generation work (device-flow spike + endpoint contract + consent/failure policy — see
+  "Image generation via Telex" below), and the mid-session safety transcript. No reference file ships
   content that depends on an unrun Phase 1.5 item.
 - **Safety regression is mid-session, not only cold-start.** At least one Phase 1/Phase 3
   transcript must start with local prototype work, then later switch to a destructive remote
@@ -382,7 +382,8 @@ owned decision, not a revisit clause nothing can trigger.
   implementation also depends on two backend stages this plan drops: a site-spec pass
   (`layoutMode` shapes the preview shell) and an in-stream hero-image pipeline (`AI_IMAGE`
   detection + parallel generation) — without an image policy the previews ship without
-  photography, losing Telex's main distinctiveness axis. **Falsifier:** the Phase 1.5 preview
+  photography, losing Telex's main distinctiveness axis (partially addressed by the
+  Telex-brokered image endpoint — see "Image generation via Telex", design-previews tie-in). **Falsifier:** the Phase 1.5 preview
   spike A/Bs this workflow against "single best direction, no ceremony" on final-output
   quality; if the four-preview flow does not win, design-previews.md collapses to one paragraph
   in design.md ("offer 2–4 written directions for new sites; honor the pick"). Until that spike
@@ -484,8 +485,15 @@ wordpress/
     │                               #   HTML/CSS previews to a temp dir, render a 2x2 local
     │                               #   gallery, pause for selection, then feed selected
     │                               #   direction + preview HTML into final generation
-    ├── images-media.md             # Image conventions (Telex generating-images, de-Telexed),
-    │                               #   wp media import, CDN cache / filename versioning
+    ├── images-media.md             # AI_IMAGE placeholder contract (reinstated as OUR contract,
+    │                               #   consumed by scripts/telex-images.mjs — see "Image
+    │                               #   generation via Telex"), real generation via the
+    │                               #   Telex-brokered endpoint + device auth, consent-first
+    │                               #   login UX (decline → deliberately imageless design, no
+    │                               #   placeholders; failure-after-consent → placeholders stay),
+    │                               #   asset-reference model (spike), wp media import, CDN
+    │                               #   cache / filename versioning. GATED on the Telex
+    │                               #   endpoint shipping
     ├── wordpress-com.md            # FIRST table: plan-capability matrix (plan → MCP? SSH/SFTP?
     │                               #   theme upload? wp-cli?) — the agent must check the plan
     │                               #   before promising anything. Then: "what to tell the user
@@ -509,7 +517,8 @@ bare agent actually got wrong. The list above is the hypothesis.
 **Sequencing (the gate rule, applied):** local-sites, block-markup, themes-and-patterns, and
 design can be written after Phase 1 core. wordpress-com, deploy, images-media, and
 backups-and-safety depend on Phase 1.5 items (tasks 4–8, MCP enumeration, real-site SSH
-verification, the image policy) and are written only after those run. design-previews is gated
+verification, the Telex image endpoint + device-flow spike) and are written only after those
+run. design-previews is gated
 on the preview spike's falsifier.
 
 ### SKILL.md design
@@ -520,13 +529,17 @@ on the preview spike's falsifier.
   - Local sites are disposable; remote sites are not.
   - For new sites/themes or material redesigns, offer design directions before implementing
     (the full four-preview workflow ships only if its Phase 1.5 falsifier passes).
+  - Images require explicit consent: before building anything that would include images, ask
+    the user whether they want generated images (one-time Telex/WordPress.com login). Declining
+    means an imageless design — no placeholder files, no `AI_IMAGE:` markers, no broken
+    references. Never start the login flow unprompted; never block the build on it.
   - Backup (db export + changed files, copied off-host) before any destructive remote operation;
     destructive remote recipes refuse to continue unless given a backup manifest path.
   - Never edit WordPress core. Confirm production writes. Dry-run search-replace first.
   - Always stop local servers you started.
   - Local workflows require a POSIX shell (macOS/Linux/WSL). Native Windows is unsupported in
     v1 — stated here, where the agent reads it, not only in a README.
-- No wrapper scripts for normal composition. Three mandatory exceptions, all
+- No wrapper scripts for normal composition. Four mandatory exceptions, all
   determinism-as-safety: (1) `scripts/wpcom-backup.sh` creates a backup manifest (five lines:
   target site, timestamp, db-export path, changed-files-archive path, off-host copy location)
   plus a command log; every destructive remote recipe consumes that manifest and — because a
@@ -546,8 +559,11 @@ on the preview spike's falsifier.
   cycles each found a new bug in the markdown version (wrapper-pid kill, missing `--login`,
   mount divergence, 502-tolerant readiness poll, self-matching pgrep), and mount consistency
   between the server and one-off wp-cli is enforced by construction; the fallback ladder folds
-  into it as a tmux branch. The design-preview gallery is a disposable generated artifact in
-  `/tmp`, not a fourth required script. Nothing else.
+  into it as a tmux branch. (4) `scripts/telex-images.mjs` (auth/status/generate) — device-flow
+  polling, chmod-600 token storage, base64→jpg handling, 401 re-auth routing, and
+  never-print-the-token discipline are exactly the brittle, security-sensitive sequence that
+  must not be improvised from prose (see "Image generation via Telex"). The design-preview
+  gallery is a disposable generated artifact in `/tmp`, not a required script. Nothing else.
 
 ### Content filter (applies to every extracted paragraph)
 
@@ -559,8 +575,11 @@ on the preview spike's falsifier.
 - **Drop — product policy / weak-model compensation**: Telex's "only index.html initially",
   fixed port 8881, one-project-type-only rules, output-style/narration rules, "never run builds"
   (our agent does run `npm run build`), generic Telex subagent delegation rules outside the
-  explicit four-preview workflow, footer credit, `AI_IMAGE:` backend markers,
-  `theme:./assets/` prefixes; Studio's `wpcom_request`/`take_screenshot`/
+  explicit four-preview workflow, footer credit, `theme:./assets/` prefixes (Telex's build-time
+  rewrite — we have no rewrite step; the asset-reference model is a registered spike). The
+  `AI_IMAGE:` alt marker was originally dropped as a backend dependency but is **reinstated as
+  the skill's own contract** now that the skill ships its own consumer
+  (`scripts/telex-images.mjs` — see "Image generation via Telex"); Studio's `wpcom_request`/`take_screenshot`/
   `validate_and_fix_blocks`/`studio wp` tool references.
 - **Rewrite as goals, not steps**: validation loops, polish methodology, deployment flow — state
   the sequence and the why; don't script every command.
@@ -580,7 +599,7 @@ on the preview spike's falsifier.
 | Med | Telex blocks/plugins skills + inner-blocks, interactivity-api refs | blocks-and-plugins.md |
 | Med | Studio `wpcom-remote-management` (API namespace map, `_fields` trimming) | wordpress-com.md |
 | Med | Studio `visual-polish` (diagnose-all → batch-fix methodology) | design.md |
-| Med | Telex `generating-images` (prompt/aspect conventions, `-v2` versioning) | images-media.md |
+| High | Telex `generating-images` SKILL.md (full `AI_IMAGE: description \| style \| aspect-ratio` contract, naming rules, grid-consistency rule, `-v2` versioning) + `DeviceAuthController.php`/`telex-plugin/assets/js/device-flow.js` (reference implementations for the auth script) | images-media.md, telex-images.mjs |
 | Low | Studio `plugin-recommendations`, `rank-me-up`, `need-for-speed`, `taxonomist` | possible follow-up skills, post-v1 |
 | Skip | Studio `annotate`, `site-spec`, `studio-cli`; Telex output-style/subagent/build rules | product behavior, not knowledge |
 
@@ -612,6 +631,213 @@ candidates, mirroring the Low-priority extraction row.
 
 ---
 
+## Image generation via Telex (added 2026-06-12 — cross-repo capability)
+
+Goal: a user with the skill installed gets real generated images for their site (hero photos,
+section images), authenticated **as themselves**, with the skill shipping **no model API key**.
+
+### Why a Telex broker endpoint (verified against Telex source, 2026-06-12)
+
+Telex generates images server-side through the WPCOM AI proxy
+(`public-api.wordpress.com/wpcom/v2/ai-api-proxy/v1/publishers/google/models/<model>:predict`
+for Imagen, `:generateContent` for Gemini image models —
+`server/src/Service/GoogleImageService.php`), authenticated with a **server-held secret**
+(`GOOGLE_VERTEX_API_TOKEN`) plus an `X-WPCOM-AI-Feature` attribution header. That secret can
+never ship to user machines, and the proxy has no per-end-user auth story for third-party local
+agents — so the skill cannot call the proxy directly. A small Telex API endpoint brokers: the
+user authenticates to Telex (which **is** WordPress.com auth), Telex calls the proxy with its
+own secret on their behalf. Supported aspect ratios at the proxy: 1:1, 3:4, 4:3, 9:16, 16:9 at
+1K — matching Telex's `square`/`landscape`/`portrait` vocabulary.
+
+### Auth is already built — reuse it, do not invent a flow
+
+Telex ships an **RFC 8628 device authorization flow for external plugins**, in production use
+today (`server/src/Controllers/DeviceAuthController.php`; SPA page `client/src/routes/device.tsx`;
+existing consumer `telex-plugin/assets/js/device-flow.js`):
+
+1. `POST /auth/device/code` (no auth, IP rate-limited) → `device_code`, `user_code`,
+   `verification_uri_complete` (`<base>/device?code=XXXX`).
+2. User opens that URL in a browser and logs in to Telex via WP.com auth; the SPA calls
+   `POST /auth/device/authorize` (cookie auth, idempotent).
+3. The local client polls `POST /auth/device/token` (standard `authorization_pending` /
+   `slow_down` / `expired_token` responses) and receives a **1-year Telex JWT**, scope
+   `api:plugin`, one-time-use code, revocation supported (`RevokedTokenService`).
+4. `BearerAuthMiddleware` already accepts these JWTs on every `/api/v1/*` route.
+
+This is exactly the "ask the user to authenticate, store id/auth info locally" requirement —
+already implemented and battle-tested. The skill-side work is a thin, correct client.
+
+### New server work (telex repo — separate deliverable, needs an owner)
+
+- `POST /api/v1/images/generate` behind `BearerAuthMiddleware`. Request:
+  `{prompt, style, aspect_ratio}`; response: `{image_base64, mime, model}` (JSON+base64 —
+  matches what the proxy returns anyway, trivially consumable from node/curl). Implementation
+  is a thin controller over the existing `AiClientFactory::createImageService` path — the same
+  code `GenerateImageJobHandler` already uses; no new generation logic.
+- **Quota: DEFERRED — no per-user quota at launch (stakeholder decision, 2026-06-12).** The
+  endpoint ships without quota limiting. What ships instead, so the decision is reversible and
+  the spend is visible: the distinct `X-WPCOM-AI-Feature` value (next bullet) makes per-feature
+  cost measurable from day one, and the client already routes on 429, so adding quota later is
+  a server-only change — no skill update needed. **Revisit trigger (owned, not a vague
+  "later")**: cost reports flag the feature, or any single-user usage spike. The designed
+  mechanism is recorded for that day: server-side only, keyed by authed `uid`; durable
+  per-user/per-UTC-day counter in the Telex DB with atomic check-and-increment and
+  reserve-then-refund; fail-closed; **not** the existing `RateLimitedTrait` (APCu — per-host
+  memory, fail-open, reset on deploy — acceptable only as a burst throttle in front of the DB
+  counter); visibility via `{limit, used, remaining, resets_at}` on responses plus a cheap
+  authed quota read. A prompt-length cap (basic input sanity, not quota) still ships with the
+  endpoint.
+- Distinct `X-WPCOM-AI-Feature` value (e.g. `wp-skill-image`) for cost attribution — do not
+  ride on Telex's existing feature names.
+- Error contract the script can route on: 401 (token invalid/revoked → re-auth), 429
+  (reserved — not expected at launch with quota deferred, but the client handles it so quota
+  can be added server-side later without a skill release), 422 (moderation/invalid prompt —
+  surface the reason, don't retry).
+- **Owned open question — scope**: device-flow JWTs carry `api:plugin` (the whole plugin API:
+  projects, agent generate, block fixer). Either accept that for v1 or mint a narrower
+  `api:images` scope server-side. Decide before launch; record the decision here.
+
+### Skill-side work (gated on the endpoint existing in at least staging)
+
+`scripts/telex-images.mjs` — node 18+, zero dependencies (built-in fetch). Subcommands:
+
+- `auth`: run the device flow — print `verification_uri_complete` for the user to open (the
+  agent relays it in chat; do not assume a browser-open command), poll at the server-specified
+  interval, store the token per the local-state rules below. Never print the token; redact it
+  from any error output.
+- `status`: token present/valid check (cheap authed call), so the agent can decide whether to
+  offer generation without triggering an auth ceremony. If the server later adds quota fields
+  (`limit/used/remaining/resets_at`), `status` surfaces them and the agent plans batches
+  against `remaining` — tolerated as absent until then.
+- `generate --files <theme files…>`: scan for `AI_IMAGE: description | style | aspect-ratio`
+  alt markers, generate each via the endpoint, write `assets/<name>.jpg`, rewrite the alt to
+  human alt text (marker removed). **Idempotent**: skip placeholders whose target file already
+  exists; regeneration uses the `-v2` filename convention. Also `generate --prompt … --aspect …
+  --out …` for ad-hoc single images.
+- On 401: print the exact re-auth command and stop — no retry loops. On 429 mid-batch
+  (forward-compat): stop, report which placeholders remain unfilled (they stay placeholders
+  per the failure-after-consent rule), and print `Retry-After`/`resets_at` if present — never
+  poll-retry.
+
+### Local state — what is stored where (decided 2026-06-12)
+
+Two stores with opposite requirements; do not mix them.
+
+- **Token (identity — per-user, machine-global, secret).**
+  `${XDG_CONFIG_HOME:-~/.config}/wp-agent-skill/telex-auth.json`, directory `chmod 700`, file
+  `chmod 600`, written atomically (temp file + rename), perms re-asserted by the script on
+  every read. Contents: `{access_token, token_type, expires_at, telex_base_url, username}` —
+  `expires_at` lets `status` warn before the 1-year JWT lapses; `telex_base_url` makes the
+  staging→production switch and any future first-party endpoint swap a config value, not a
+  code change; `username` lets the agent say *who* is logged in without an API call.
+  **Never inside the project tree** — a token in the repo is one `git add .` away from a leak;
+  this is why it cannot live in `.playground/` next to the other state files. One token per
+  user per machine; all projects share it.
+  **Platform compatibility (matches the skill's declared scope — macOS/Linux/WSL):** the
+  script resolves the path itself via
+  `process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config')` — never shell `~`
+  expansion, which doesn't exist inside Node. Linux: XDG-native. macOS: `~/.config` is not
+  OS-native but is the established CLI convention (gh, npm, gcloud) — one path across all
+  POSIX platforms is deliberate. WSL: fine on the default Linux-fs home, but a home relocated
+  to `/mnt/c` (DrvFs) silently ignores chmod unless mounted with `metadata` — so the
+  perms-re-assert on read must **verify** the mode and warn loudly if 600 doesn't stick, not
+  just call chmod. Native Windows stays out of scope (SKILL.md already requires a POSIX
+  shell); `chmod 600` is a no-op on NTFS, so supporting it would mean `%APPDATA%` + ACLs —
+  recorded so a future port doesn't ship a false security claim.
+- **Image decision (preference — per-project, not secret).**
+  `.playground/images.json`: `{"images": "yes" | "no", "decided_at": <ISO timestamp>}`,
+  written when the user answers the consent ask, read at session start. This is what makes
+  "no re-asking" survive multi-turn amnesia and **new sessions** — the same recorded-state
+  principle as `.playground/port` (a turn-3 or day-3 agent reads the file instead of
+  guessing). An imageless theme alone is ambiguous (declined? never asked?); the file
+  disambiguates. "Add images" / "remove images" from the user overwrites it; absence of the
+  file = never asked → the consent flow runs. Local state, fine to gitignore with the rest of
+  `.playground/`; if lost, the worst case is one re-ask.
+- **Nothing else.** Which images exist is encoded where it already lives: markers in the
+  markup, files in `assets/` (the `generate` idempotency rule). No third registry to drift
+  out of sync.
+
+`references/images-media.md` documents: the placeholder contract (description/style/aspect
+vocabulary, naming rules, grid-consistency rule — lifted from Telex `generating-images`), the
+consent-and-login UX below, when generation runs (after the theme passes the editor gate,
+before "done"), and the failure policy.
+
+### Consent & login UX (decided 2026-06-12)
+
+The ask happens **before any theme markup is written**, because the answer decides whether
+`AI_IMAGE:` placeholders exist in the markup at all — this is a design fork, not a
+post-processing step.
+
+1. **Trigger**: the agent is about to build a site/theme that would include images, or the
+   user explicitly asks for images.
+2. **Already authed** (`telex-images.mjs status` passes): no login ceremony — build with
+   placeholders and generate. Mention in passing that images will be generated via the user's
+   Telex login (so usage is never silent).
+3. **Not authed — ask once, plainly**, in substance: *"I can generate real images for this
+   site. That needs a one-time login to Telex with your WordPress.com account — I'll give you
+   a link to open in your browser; I never see your password, and a token is stored locally so
+   you won't be asked again. Want images, or should I design the site without them?"* The
+   agent must name what is stored (a local token) and where the login happens (their browser,
+   on Telex/WordPress.com) — informed consent, not a yes/no toll gate.
+4. **User says yes**: run `telex-images.mjs auth`, relay `verification_uri_complete` in chat
+   (never auto-open a browser, never echo the token), wait for the poll to complete, then
+   build with `AI_IMAGE:` placeholders and generate after the editor gate. If the device code
+   expires before the user finishes, offer one retry; a second lapse is treated as a decline.
+5. **User says no → imageless design, not a degraded one**: the theme is deliberately designed
+   without images — typography-, color-, and pattern-driven — with **no placeholder files, no
+   `AI_IMAGE:` markers, no empty `<img>` tags, no broken references** anywhere in the output.
+   The decision is recorded in `.playground/images.json` (see "Local state" below) and
+   respected across sessions — no re-asking, no nagging, including by a fresh agent tomorrow;
+   the agent states once that the user can say "add images" later, which re-opens the ask and
+   overwrites the record.
+6. **Decline ≠ failure**: if the user consented and generation then fails midway (endpoint
+   down, a 429, offline), the placeholders already in the markup **stay**, backed by
+   deterministic local placeholder images at the right aspect ratio so the site still renders,
+   and the agent says how to resume (`telex-images.mjs generate` is idempotent — it fills only
+   what's missing). The no-placeholder rule applies only to the decline path.
+7. **Adding images to an existing imageless site** re-enters the flow at step 2/3 — same ask,
+   then the agent reworks the affected sections to carry images properly (a design edit, not a
+   find-and-replace).
+
+Image generation remains an enhancement: a Telex outage, a rate-limit, or a "no" must never
+block site creation — the local-first promise survives. User-provided or openly-licensed
+images remain a third option the agent may suggest at the ask, and they need no login.
+
+### Registered spikes (Phase 1.5, alongside the other deferred items)
+
+- **Headless device-flow pass**: the flow is verified in source and used by telex-plugin, but
+  has never been driven from a terminal script. One end-to-end pass: `auth` → user authorizes
+  in browser → token stored (assert: file at the XDG path with 600 perms inside a 700 dir,
+  nothing token-shaped under the project tree, token absent from stdout/stderr) → authed call
+  succeeds → revoke in Telex → next call 401s → re-auth works. UX check: the agent relays the URL in chat and the user round-trips without confusion.
+- **Endpoint contract test**: each aspect ratio maps correctly; response sizes (±1–2 MB base64)
+  are fine over the wire; moderation failure surfaces as 422 with a usable message. (Quota
+  assertions — concurrent check-and-increment, refund-on-failure, quota fields on responses —
+  are parked with the deferred quota and run if/when it ships.)
+- **Asset-reference model** (genuine open design question): Telex rewrites `theme:./assets/`
+  at build time — we have no build step, and block templates (`.html`) cannot run PHP to call
+  `get_theme_file_uri()`. Two candidate models, pick one in the spike: (a) image content lives
+  in **PHP patterns** that reference `assets/` via `get_theme_file_uri()` — theme stays
+  self-contained and deployable; (b) `playground.sh wp media import` into the Media Library and
+  absolute URLs in markup — plays nicer with the editor but couples markup to the local URL and
+  drags search-replace into every deploy. Default hypothesis: (a). images-media.md is not
+  written until this is decided.
+- **Design-previews tie-in**: if the preview spike survives its falsifier, authed users can get
+  one real hero image per preview direction (4 images — cheap, restores Telex's main
+  distinctiveness axis); unauthed previews use gradient placeholders. Strictly optional — the
+  preview flow must not acquire an auth dependency.
+
+### Sequencing and gates
+
+The Telex endpoint is a **cross-repo dependency with its own owner and timeline**. Nothing
+skill-side ships before: endpoint live (staging acceptable for the spike) and the scope
+decision recorded (quota is deferred by stakeholder decision — see server work). The device-flow spike and the asset-reference spike gate
+images-media.md exactly like the preview falsifier gates design-previews.md. Until then the
+shipped skill stays honest: no `AI_IMAGE:` markers (nothing exists to consume them), imageless
+designs by default, user-provided or openly-licensed images when the user wants photography.
+
+---
+
 ## Phase 3 — End-to-end test and iterate
 
 1. Re-run the Phase 1 eval tasks **with the skill** on each agent (claude, codex, gemini, pi).
@@ -625,12 +851,30 @@ candidates, mirroring the Low-priority extraction row.
    2x2 gallery in a temp dir, waits for the user's selected option, and makes the generated theme
    first fold visibly match that option. Repeat once with "no" to verify the skip path does not
    block implementation.
-3. Full flow on a real WP.com test site: create local → polish → create backup manifest → deploy
+3. Image-generation flow on at least two agents (gated on the Telex endpoint): build the
+   coffee-shop theme, then "generate the images". **Pass =** every `AI_IMAGE:` placeholder
+   replaced by a real `.jpg` at the requested aspect ratio (file-inspected), alts rewritten to
+   human text with no marker remaining, images render on the local site (cookie-jar curl or
+   screenshot), the token never appears in the transcript or logs, and re-running `generate`
+   is a no-op (idempotency). Two more runs probe the consent UX: (a) **decline path** — the
+   agent asks before writing any markup, names the local token and the browser login in the
+   ask, and on "no" produces a deliberately imageless site: zero placeholder files, zero
+   `AI_IMAGE:` markers, zero empty/broken `<img>` references (grep + frontend check),
+   `.playground/images.json` records the decline, and a **fresh session** on the same project
+   does not re-ask (reads the record instead); (b) **failure-after-consent path** (simulate the
+   endpoint down after login) — placeholders and markers stay, the site renders with
+   deterministic placeholder images, and the agent explains how to resume. Image count per
+   run recorded in the cost rubric (it doubles as the usage baseline for the deferred quota
+   decision).
+4. Full flow on a real WP.com test site: create local → polish → create backup manifest → deploy
    → verify → roll back from the manifest artifacts (prove the safety discipline actually works
    and is not just prose).
-4. Leak review: no Telex/Studio tool names, sandbox assumptions, or backend magic in any reference.
-5. Trim pass: re-apply the content filter; cut anything the agents demonstrably didn't need.
-6. Distribute: `npx skills add <org>/agent-plugins@wordpress`.
+5. Leak review: no Telex/Studio tool names, sandbox assumptions, or backend magic in any
+   reference (the device-flow endpoints and `telex-images.mjs` are the sanctioned exception —
+   they are a real public dependency, not leaked internals; the leak review checks nothing
+   *else* from Telex's backend escaped).
+6. Trim pass: re-apply the content filter; cut anything the agents demonstrably didn't need.
+7. Distribute: `npx skills add <org>/agent-plugins@wordpress`.
 
 **Split into multiple skills only with evidence** (triggering misses, context bloat measured in
 practice) — not preemptively.
@@ -652,9 +896,24 @@ practice) — not preemptively.
 - **Playground fidelity** — PHP WASM quirks (extensions, cron, mail, performance) may break the
   local-first premise for some site types (e.g., WooCommerce). The honest "differences from
   production" section in local-sites.md is mandatory.
-- **Image generation** — agents differ; most have no image tool. images-media.md needs a graceful
-  degradation path (placeholders + structured prompts for later generation) rather than assuming
-  a backend like Telex's.
+- **Image generation via Telex** (see its section for design) — remaining risks, owned:
+  - **Token at rest**: a 1-year, `api:plugin`-scoped JWT sits in a chmod-600 file on the user's
+    machine, readable by any local process including the agent itself — same trust class as
+    `~/.ssh` keys, but the scope is broader than the feature needs. Mitigations: document the
+    revocation path in images-media.md; push for a narrower `api:images` scope server-side.
+  - **Cost/abuse — ACCEPTED for launch (stakeholder decision, 2026-06-12)**: the endpoint
+    exposes Automattic-paid generation to every authed WP.com user with **no per-user quota**.
+    Mitigations that do ship: distinct `X-WPCOM-AI-Feature` attribution (spend visible from
+    day one), prompt-length cap, revocable tokens, and a client that already handles 429 — so
+    flipping quota on later is server-only. Revisit trigger: cost reports or a usage spike;
+    the full quota design is recorded in the server-work section, ready to build.
+  - **Runtime dependency**: a Telex outage must never block the local-first flow — decline →
+    imageless design; failure after consent → placeholders stay and `generate` resumes later
+    (enforced by the consent & login UX rules in the image section).
+  - **Product positioning (owned open question)**: Telex as broker is the pragmatic v1 because
+    auth + proxy plumbing already exist there; a first-party WP.com endpoint with per-user auth
+    would obsolete the broker. Revisit if/when such an endpoint exists — the skill-side script
+    isolates the base URL so the swap is cheap.
 - **Design-preview portability** — agents differ in whether they can spawn four subagents and
   whether they can open a local file in a browser. The skill must define the ideal path
   (parallel preview agents + browser-opened gallery) and the honest fallback (isolated sequential
