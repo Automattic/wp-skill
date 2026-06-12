@@ -667,37 +667,57 @@ existing consumer `telex-plugin/assets/js/device-flow.js`):
 This is exactly the "ask the user to authenticate, store id/auth info locally" requirement —
 already implemented and battle-tested. The skill-side work is a thin, correct client.
 
-### New server work (telex repo — separate deliverable, needs an owner)
+### The server endpoint EXISTS — `feat/studio-images-endpoint`
 
-- `POST /api/v1/images/generate` behind `BearerAuthMiddleware`. Request:
-  `{prompt, style, aspect_ratio}`; response: `{image_base64, mime, model}` (JSON+base64 —
-  matches what the proxy returns anyway, trivially consumable from node/curl). Implementation
-  is a thin controller over the existing `AiClientFactory::createImageService` path — the same
-  code `GenerateImageJobHandler` already uses; no new generation logic.
-- **Quota: DEFERRED — no per-user quota at launch (stakeholder decision, 2026-06-12).** The
-  endpoint ships without quota limiting. What ships instead, so the decision is reversible and
-  the spend is visible: the distinct `X-WPCOM-AI-Feature` value (next bullet) makes per-feature
-  cost measurable from day one, and the client already routes on 429, so adding quota later is
-  a server-only change — no skill update needed. **Revisit trigger (owned, not a vague
-  "later")**: cost reports flag the feature, or any single-user usage spike. The designed
-  mechanism is recorded for that day: server-side only, keyed by authed `uid`; durable
-  per-user/per-UTC-day counter in the Telex DB with atomic check-and-increment and
-  reserve-then-refund; fail-closed; **not** the existing `RateLimitedTrait` (APCu — per-host
-  memory, fail-open, reset on deploy — acceptable only as a burst throttle in front of the DB
-  counter); visibility via `{limit, used, remaining, resets_at}` on responses plus a cheap
-  authed quota read. A prompt-length cap (basic input sanity, not quota) still ships with the
-  endpoint.
-- Distinct `X-WPCOM-AI-Feature` value (e.g. `wp-skill-image`) for cost attribution — do not
-  ride on Telex's existing feature names.
-- Error contract the script can route on: 401 (token invalid/revoked → re-auth), 429
-  (reserved — not expected at launch with quota deferred, but the client handles it so quota
-  can be added server-side later without a skill release), 422 (moderation/invalid prompt —
-  surface the reason, don't retry).
+Verified by reading the branch, 2026-06-12; deploying to staging `https://ai-w0.a8c.com/`.
+Telex branch `feat/studio-images-endpoint` (commit `c2258e8d`) ships
+`server/src/Controllers/Api/V1/ImageController.php` + the route — built for WordPress Studio
+as its first consumer; this skill is the second. **The skill targets this contract as-is; do
+not design a different one.** Actual contract (from the controller source, not from memory):
+
+- `POST /api/v1/images/generate`, behind `BearerAuthMiddleware` — so **device-flow Telex JWTs
+  work unchanged** (the middleware tries Telex JWTs before WP.com tokens; the controller only
+  reads the authed uid).
+- Request: `{"prompt": "<text>", "aspect"?: "1:1"|"4:3"|"3:4"|"9:16"|"16:9"}` — aspect
+  defaults to `16:9`; unknown values silently fall back to `16:9`. **There is no `style`
+  parameter**: the script folds the placeholder's style term into the prompt text
+  ("…, photorealistic style").
+- Response: `{"b64_json": "<base64 png>", "mime_type": "image/png"}` — **PNG, not JPG**.
+  Model: Imagen via config key `ai.models.image_design` (google-vertex path of
+  `GoogleImageService`).
+- Errors actually emitted: 401 (middleware), 400 (missing/empty prompt), 502 (any generation
+  failure, **including moderation — indistinguishable from an outage**, generic message). No
+  429, no quota — consistent with the deferral decision below.
+- **Known gaps, to raise with the endpoint owner as small follow-ups (none blocking):**
+  1. `X-WPCOM-AI-Feature` falls back to `GoogleImageService`'s default `telex-theme-image` —
+     skill spend is **not separately attributable**, which weakens the attribution-based
+     revisit trigger for the quota deferral. A distinct value (e.g. `wp-skill-image`) is a
+     one-line constructor arg.
+  2. No prompt-length cap (basic input sanity).
+  3. Moderation vs transient failure both surface as 502 — a 422 split would let the client
+     stop retrying hopeless prompts.
+  4. PNG-only output — heavier than jpg for photographic heroes; a jpg option is nice-to-have
+     (the skill works around it: see filename convention below).
+- **Quota: DEFERRED — none at launch (stakeholder decision, 2026-06-12), and the branch
+  matches.** The client already routes on 429, so adding quota later is a server-only change
+  — no skill update needed. **Revisit trigger**: cost reports flag the feature (requires gap 1
+  fixed to be per-feature), or any single-user usage spike. The designed mechanism stays
+  recorded for that day: server-side only, keyed by authed `uid`; durable per-user/per-UTC-day
+  counter in the Telex DB with atomic check-and-increment and reserve-then-refund;
+  fail-closed; **not** the existing `RateLimitedTrait` (APCu — per-host memory, fail-open,
+  reset on deploy — acceptable only as a burst throttle in front of the DB counter);
+  visibility via `{limit, used, remaining, resets_at}` on responses plus a cheap authed quota
+  read.
 - **Owned open question — scope**: device-flow JWTs carry `api:plugin` (the whole plugin API:
   projects, agent generate, block fixer). Either accept that for v1 or mint a narrower
   `api:images` scope server-side. Decide before launch; record the decision here.
+- **Environment**: staging base URL `https://ai-w0.a8c.com/` (feature branch deploy) — this is
+  the `telex_base_url` the token file records during the spike; production swap is a config
+  value, not a code change. The device-flow endpoints (`/auth/device/*`) and the `/device`
+  page must also answer on the same host for `auth` to work against staging — first thing the
+  spike checks.
 
-### Skill-side work (gated on the endpoint existing in at least staging)
+### Skill-side work (gated on the staging contract test passing)
 
 `scripts/telex-images.mjs` — node 18+, zero dependencies (built-in fetch). Subcommands:
 
@@ -710,10 +730,17 @@ already implemented and battle-tested. The skill-side work is a thin, correct cl
   (`limit/used/remaining/resets_at`), `status` surfaces them and the agent plans batches
   against `remaining` — tolerated as absent until then.
 - `generate --files <theme files…>`: scan for `AI_IMAGE: description | style | aspect-ratio`
-  alt markers, generate each via the endpoint, write `assets/<name>.jpg`, rewrite the alt to
-  human alt text (marker removed). **Idempotent**: skip placeholders whose target file already
-  exists; regeneration uses the `-v2` filename convention. Also `generate --prompt … --aspect …
-  --out …` for ad-hoc single images.
+  alt markers, generate each via the endpoint, write `assets/<name>.png`, rewrite the alt to
+  human alt text (marker removed). Mapping to the real endpoint contract: the style term is
+  folded into the prompt text (no `style` param server-side); the aspect words map
+  `square→1:1`, `landscape→16:9`, `portrait→9:16` (the endpoint also accepts `4:3`/`3:4` for
+  ad-hoc use); the response is PNG, so **the placeholder filename convention is `.png`** — a
+  deliberate deviation from Telex's always-`.jpg` rule (it's our contract now, and writing PNG
+  bytes under a `.jpg` name is the kind of lie that bites later). **Idempotent**: skip
+  placeholders whose target file already exists; regeneration uses the `-v2` filename
+  convention. Also `generate --prompt … --aspect … --out …` for ad-hoc single images.
+- On 502: report it plainly (could be moderation or an outage — the endpoint doesn't
+  distinguish yet, see gap 3); skip that image, continue the batch, list failures at the end.
 - On 401: print the exact re-auth command and stop — no retry loops. On 429 mid-batch
   (forward-compat): stop, report which placeholders remain unfilled (they stay placeholders
   per the failure-after-consent rule), and print `Retry-After`/`resets_at` if present — never
@@ -810,10 +837,14 @@ images remain a third option the agent may suggest at the ask, and they need no 
   in browser → token stored (assert: file at the XDG path with 600 perms inside a 700 dir,
   nothing token-shaped under the project tree, token absent from stdout/stderr) → authed call
   succeeds → revoke in Telex → next call 401s → re-auth works. UX check: the agent relays the URL in chat and the user round-trips without confusion.
-- **Endpoint contract test**: each aspect ratio maps correctly; response sizes (±1–2 MB base64)
-  are fine over the wire; moderation failure surfaces as 422 with a usable message. (Quota
-  assertions — concurrent check-and-increment, refund-on-failure, quota fields on responses —
-  are parked with the deferred quota and run if/when it ships.)
+- **Endpoint contract test — against staging `https://ai-w0.a8c.com/` as soon as the branch
+  deploy lands**: device-flow endpoints + `/device` page answer on that host; a device-flow
+  JWT is accepted by `POST /api/v1/images/generate`; each of the five `aspect` enum values
+  returns an image with the right dimensions; response sizes (±1–2 MB base64 PNG) are fine
+  over the wire; 400 on empty prompt; a moderation-bait prompt surfaces as 502 (confirming
+  gap 3's behavior so the script's error copy is honest). (Quota assertions — concurrent
+  check-and-increment, refund-on-failure, quota fields on responses — are parked with the
+  deferred quota and run if/when it ships.)
 - **Asset-reference model** (genuine open design question): Telex rewrites `theme:./assets/`
   at build time — we have no build step, and block templates (`.html`) cannot run PHP to call
   `get_theme_file_uri()`. Two candidate models, pick one in the spike: (a) image content lives
@@ -829,9 +860,12 @@ images remain a third option the agent may suggest at the ask, and they need no 
 
 ### Sequencing and gates
 
-The Telex endpoint is a **cross-repo dependency with its own owner and timeline**. Nothing
-skill-side ships before: endpoint live (staging acceptable for the spike) and the scope
-decision recorded (quota is deferred by stakeholder decision — see server work). The device-flow spike and the asset-reference spike gate
+The Telex endpoint **exists** (`feat/studio-images-endpoint`, deploying to staging
+`https://ai-w0.a8c.com/`) — the cross-repo dependency is now coordination, not construction:
+the endpoint has another consumer (WordPress Studio), so contract changes must be coordinated,
+and the contract test in the spike is the tripwire for silent drift. Nothing skill-side ships
+before: the staging contract test passes and the scope decision is recorded (quota is deferred
+by stakeholder decision — see the endpoint section). The device-flow spike and the asset-reference spike gate
 images-media.md exactly like the preview falsifier gates design-previews.md. Until then the
 shipped skill stays honest: no `AI_IMAGE:` markers (nothing exists to consume them), imageless
 designs by default, user-provided or openly-licensed images when the user wants photography.
@@ -853,7 +887,7 @@ designs by default, user-provided or openly-licensed images when the user wants 
    block implementation.
 3. Image-generation flow on at least two agents (gated on the Telex endpoint): build the
    coffee-shop theme, then "generate the images". **Pass =** every `AI_IMAGE:` placeholder
-   replaced by a real `.jpg` at the requested aspect ratio (file-inspected), alts rewritten to
+   replaced by a real `.png` at the requested aspect ratio (file-inspected), alts rewritten to
    human text with no marker remaining, images render on the local site (cookie-jar curl or
    screenshot), the token never appears in the transcript or logs, and re-running `generate`
    is a no-op (idempotency). Two more runs probe the consent UX: (a) **decline path** — the
@@ -903,10 +937,12 @@ practice) — not preemptively.
     revocation path in images-media.md; push for a narrower `api:images` scope server-side.
   - **Cost/abuse — ACCEPTED for launch (stakeholder decision, 2026-06-12)**: the endpoint
     exposes Automattic-paid generation to every authed WP.com user with **no per-user quota**.
-    Mitigations that do ship: distinct `X-WPCOM-AI-Feature` attribution (spend visible from
-    day one), prompt-length cap, revocable tokens, and a client that already handles 429 — so
-    flipping quota on later is server-only. Revisit trigger: cost reports or a usage spike;
-    the full quota design is recorded in the server-work section, ready to build.
+    Mitigations that ship today: revocable tokens and a client that already handles 429 — so
+    flipping quota on later is server-only. Mitigations that need the follow-up gaps fixed on
+    the endpoint branch: distinct `X-WPCOM-AI-Feature` attribution (currently shares
+    `telex-theme-image`, so skill spend is invisible in per-feature cost reports — the revisit
+    trigger is blunted until fixed) and a prompt-length cap. Revisit trigger: cost reports or
+    a usage spike; the full quota design is recorded in the endpoint section, ready to build.
   - **Runtime dependency**: a Telex outage must never block the local-first flow — decline →
     imageless design; failure after consent → placeholders stay and `generate` resumes later
     (enforced by the consent & login UX rules in the image section).
