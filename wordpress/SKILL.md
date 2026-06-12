@@ -37,8 +37,18 @@ Run `scripts/playground.sh` from the project directory (its state lives in `./.p
    `editor-gate.mjs` against the live site. Invalid blocks render fine on the frontend and
    break only in the editor — screenshots can't catch them.
 4. **Never edit WordPress core.** `wp search-replace` always dry-runs first.
-5. **Always stop servers you started** — `playground.sh stop` asserts cleanup; it must
-   print "stopped clean".
-6. **For new sites/redesigns, users choose from rendered HTML previews in a browser**
+5. **Leave the server running when you hand work back — the user needs it live to test.**
+   Do NOT run `playground.sh stop` just because development is "done"; stopping a site the
+   user is about to try is a defect, not cleanup. Stop ONLY when the user asks, or when you
+   must restart to change the mount set. Whenever you stop — and when you finish — give the
+   user the one-line `playground.sh ensure …` command to bring the site back. (`stop` still
+   asserts clean teardown and must print "stopped clean" on the occasions you do run it.)
+6. **End every rendered change by printing a clickable link the user can test.** Print the
+   live URL from the recorded port — `http://127.0.0.1:$(cat .playground/server.port)/` —
+   deep-linked to the part you changed: a section anchor (`…/#<anchor>`), a specific page
+   (`…/sample-page/`), or the editor (`…/wp-admin/`) for editor-only work. Default to the
+   home page for general or site-wide changes. Always resolve the real running port; never
+   hardcode or assume one.
+7. **For new sites/redesigns, users choose from rendered HTML previews in a browser**
    (`references/design.md`) — never from text directions, terminal option lists, or ASCII
    mockups.

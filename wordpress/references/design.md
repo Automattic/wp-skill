@@ -41,10 +41,36 @@ For each direction, generate one complete, self-contained HTML document:
 
 Write everything to `/tmp/wp-design-previews-<site-slug>-<timestamp>/`:
 `directions.json`, `option-1/preview.html` … `option-4/preview.html`, and `index.html` — a
-2×2 grid of `<iframe>`s, each labeled with its option number and title. Open it
-(`xdg-open`/`open`) if a browser-open command is available and permitted; otherwise print
-the absolute path and tell the user to open it. Then **stop and ask in chat** which option
-to build on (1–4, or none) — do not write any theme files until the user answers or skips.
+2×2 grid of `<iframe>`s, each labeled with its option number and title.
+
+**Serve the gallery over a local HTTP server — never hand the user a `file://` path.** The
+`index.html` loads each preview through a relative `<iframe src>`, and a sandboxed browser
+(Flatpak/Snap Chrome/Firefox, the common Linux default) opens `file://` URLs through a
+document portal that rewrites the path to something like
+`file:///run/user/1000/doc/<hash>/index.html`. The siblings aren't exposed there, so every
+iframe 404s and the user sees an empty grid of labels. A local HTTP origin sidesteps the
+portal completely and serves the relative links correctly. Serve the gallery with this
+skill's `scripts/serve-dir.mjs` (Node, zero dependencies; resolve the path against the
+skill directory). It binds loopback on an ephemeral port, prints the real URL, and records
+its PID — never hardcode or guess a port, and don't substitute `python3 -m http.server`,
+`npx serve`, or `php -S`: Node is the only runtime this skill guarantees (and the npm
+registry may be sandboxed off).
+
+```bash
+cd /tmp/wp-design-previews-<site-slug>-<timestamp>
+setsid nohup node <skill-dir>/scripts/serve-dir.mjs . > server.log 2>&1 &
+sleep 1
+URL=$(grep -m1 -o 'http://[0-9.:]*/' server.log)   # e.g. http://127.0.0.1:53412/
+curl -s -o /dev/null -w '%{http_code}\n' "${URL}option-1/preview.html"  # expect 200; on failure read server.log
+```
+
+(`setsid nohup` keeps the server alive while you stop and wait for the user's answer — same
+pattern `playground.sh` uses for its own server.) Optionally also `xdg-open`/`open` the
+URL, but always print it so the user can open it themselves. Then **stop and ask in chat**
+which option to build on (1–4, or none) — do not write any theme files until the user
+answers or skips. Once a direction is chosen, **stop the preview server** with
+`kill "$(cat server.pid)"` from the preview dir (it's a disposable helper, not part of the
+Playground lifecycle).
 
 ### 4. Carry the selection forward as the first-fold contract
 
@@ -74,3 +100,7 @@ and owns spacing). Diagnose from the rendered DOM, then fix in one batch:
 3. **Fix the whole batch**, re-running `validate-blocks.cjs` on any file whose block markup
    changed, then take one verification screenshot pass. Don't screenshot between individual
    edits.
+4. **Hand back live.** Leave the server running and print a clickable URL deep-linked to what
+   you changed — `http://127.0.0.1:$(cat .playground/server.port)/#<anchor>` for a section,
+   `/…/` for a page, the home page for site-wide work (SKILL.md's hand-back-live rules). The
+   user tests by clicking; don't stop the server unless they ask.

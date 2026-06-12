@@ -19,7 +19,7 @@ One server tool, one lifecycle, four verbs. Run all commands from the **project 
 | `playground.sh bootstrap [dir]` | Once per project, before anything else. Creates a real Playground site and records its location in `.playground/site-dir`. Safe to re-run (no-ops if bootstrapped). |
 | `playground.sh ensure [host:vfs ...]` | Whenever you need the server running. Convergent and safe to re-run blindly: reuses a healthy server, restarts if the mount set changed, starts fresh otherwise. Pass each directory the site must see (e.g. a theme you are writing) as `./my-theme:/wordpress/wp-content/themes/my-theme`. |
 | `playground.sh wp -- <wp-cli args>` | Any wp-cli command. There is no local `wp` binary and no other working wp-cli path on Playground; this verb runs the pinned phar against the same site and the **same mount set** as the server. |
-| `playground.sh stop` | Always, when you are done. Stops the server by process group and **asserts** nothing survives — treat a failed assertion as a real bug, not noise. |
+| `playground.sh stop` | Only when the user asks to shut down, or when you must restart to change mounts — **not** as a reflex when a build is "done" (the user needs the site live to test). Stops the server by process group and **asserts** nothing survives — treat a failed assertion as a real bug, not noise. |
 
 Typical session:
 
@@ -28,7 +28,11 @@ playground.sh bootstrap
 playground.sh ensure ./my-theme:/wordpress/wp-content/themes/my-theme
 playground.sh wp -- theme activate my-theme
 # ... work, verify ...
-playground.sh stop     # must print "stopped clean"
+# Hand back LIVE: print the URL for the user to test, deep-linked to the change
+# (substitute a real page path or section anchor — don't print the placeholder).
+echo "Test it: http://127.0.0.1:$(cat .playground/server.port)/<path-or-#anchor>"
+# Leave the server running. Only `playground.sh stop` when the user asks (it must
+# print "stopped clean"); then give them the `ensure` line above to relaunch.
 ```
 
 ## Facts you must not violate
