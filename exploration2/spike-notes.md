@@ -231,3 +231,101 @@ Per PLAN.md's gate rule, the initial implementation (local-first half) is now un
 - WP.com: DEFERRED by stakeholder decision — wordpress-com.md, deploy.md, images-media.md and
   wpcom-backup.sh ssh-mode verification move to the WP.com phase; backups-and-safety.md ships
   its local/manifest discipline only.
+
+---
+
+# Image-generation spikes (2026-06-12, per HANDOFF-images.md)
+
+Session: 2026-06-12. Machine: Linux x86_64 (Ubuntu, node v22.19.0). Assertions for all three
+spikes were pre-registered in HANDOFF-images.md / PLAN.md § "Image generation via Telex" —
+graded against those lines only.
+
+**Environment deviation (declared):** staging `https://ai-w0.a8c.com/` was NOT usable this
+session. (1) The host is only reachable through the a8c SOCKS proxy (`pac.a8c.com` routes
+`192.0.80.0/20` via `SOCKS 127.0.0.1:8080`; direct TCP times out). (2) Even via the proxy,
+nginx answers **502 Bad Gateway on every path** (`/`, `/device`, `/health`,
+`/api/v1/images/generate`) — the app behind it is down or not deployed. Per stakeholder
+decision mid-session, spikes ran against the **local Telex dev server**
+`https://telex.localhost:3000` (repo `~/dev/a8c/telex` on branch `feat/studio-images-endpoint`,
+HEAD `65a3c612` = merge of trunk into the branch; images commit `c2258e8d` verified in HEAD;
+TLS via mkcert, root CA at `~/.local/share/mkcert/rootCA.pem` — curl `--cacert` /
+`NODE_EXTRA_CA_CERTS`, never `-k` after the first probe). **Follow-up registered: re-run
+spike 1 against staging when its deploy is live** — the base URL is a token-file value, so no
+code changes are expected.
+
+## Spike 1 — endpoint contract test: PASS (all assertions)
+
+Base `https://telex.localhost:3000`, real device-flow JWT (see spike 2):
+
+| Pre-registered assertion | Result |
+|---|---|
+| `POST /auth/device/code\|token\|authorize` + `/device` page answer on the host | ✓ code returns RFC 8628 payload (`device_code`, `user_code`, `verification_uri_complete`, `expires_in: 900`, `interval: 5`); `GET /device` → 200; token endpoint → `authorization_pending` before approval |
+| Device-flow JWT accepted by `POST /api/v1/images/generate` | ✓ (and 401 with no/bogus bearer) |
+| Five `aspect` values → right dimensions | ✓ `1:1`→1024x1024, `4:3`→1280x896, `3:4`→896x1280, `9:16`→768x1408, `16:9`→1408x768 (PNG IHDR inspected; magic bytes verified) |
+| Aspect defaults to `16:9`; unknown values silently fall back | ✓ no-aspect → 1408x768; `"banana"` → 200 with 1408x768 |
+| Response shape | ✓ exactly `{b64_json, mime_type:"image/png"}`; 1.2–1.9 MiB per image; 7–11 s per call |
+| 400 on empty prompt | ✓ empty, missing, and whitespace-only prompt all → 400 `{"status":"error","message":"Missing or empty \"prompt\""}` |
+| Moderation-bait prompt → 502, generic | ✓ gore prompt → 502 `{"status":"error","message":"Image generation failed"}` in 5.9 s — indistinguishable from outage, confirming the script's "could be moderation or an outage" error copy |
+
+Contract facts beyond the handoff, learned from source + spike (recorded for the script):
+- Token response carries only `{access_token, token_type, expires_in}` (no `username` field);
+  `username`/`euid`/`scope`/`grant_type` live in the JWT's `data` claim →
+  `telex-images.mjs` fills the token file's `username` by base64url-decoding its own JWT
+  payload locally (no extra API call, no invented endpoint).
+- Scope on the minted JWT is `api:plugin` (the v1 "accept broad scope" decision in PLAN.md —
+  observed, matches).
+- Error body shape is `{"status":"error","message":"…"}` for 400/502.
+
+## Spike 2 — headless device-flow pass: PASS (all assertions)
+
+Driven with curl/node ad-hoc (the script does not exist yet, per order-of-work); user
+(matiasbenedetto) did the browser authorization in the loop, twice.
+
+- `POST /auth/device/code` → relay `verification_uri_complete` in chat → user approves →
+  poll `POST /auth/device/token` → JWT (541 chars, `expires_in` 31536000 = the 1-year token). ✓
+- Token stored at `${XDG_CONFIG_HOME:-~/.config}/wp-agent-skill/telex-auth.json` with the
+  binding contents (`access_token, token_type, expires_at, telex_base_url, username`);
+  atomic write (temp + rename); dir `700`, file `600`, **verified** with `stat -c %a`
+  (ext4 — perms stick; the WSL/DrvFs warning path stays in the script). ✓
+- Nothing token-shaped under the project tree (grep for `eyJ`/`access_token`/`telex-auth`
+  excluding handoff/plan docs: zero hits); token never printed to stdout/stderr — every
+  display redacted to `<REDACTED len=541>` or key lists. ✓
+- Authed generate succeeds (spike 1 used this token). ✓
+- Revoke → next call 401s. ✓ Revocation path (from source, `AuthService::logout()` +
+  `CsrfMiddleware` exemption list): `POST /auth/logout` with the JWT presented as the
+  `telex_auth_token` cookie revokes by `jti` (fail-closed `RevokedTokenService`;
+  `BearerAuthMiddleware` checks the list on every request). Headless-drivable:
+  `curl -X POST <base>/auth/logout -H "Cookie: telex_auth_token=<jwt>"` →
+  `{"success":true}`; immediate next generate → **401**. This is also the natural `logout`
+  implementation for the script (server-side revoke + local file delete).
+- Re-auth works: fresh device code → user approves → new JWT → generate 200 (1024x1024). ✓
+- Bonus (one-time-use): re-redeeming the consumed device code → `invalid_grant`. ✓
+
+## Spike 3 — asset-reference model: DECIDED → (a) PHP patterns + `get_theme_file_uri()`
+
+Bench: fresh Playground site (`playground.sh bootstrap` in a scratch dir), two minimal
+themes mounted side by side, both passing activation; editor gate = the skill's own
+`checker/editor-gate.mjs`.
+
+- **Theme A (PHP pattern model)**: `patterns/hero.php` with `wp:cover` + `wp:image`
+  referencing `assets/*.png` via `<?php echo esc_url( get_theme_file_uri( '…' ) ); ?>` —
+  in BOTH the block-comment JSON `"url"` attr and the `<img src>` (pattern files are PHP
+  throughout; TT4-style). `templates/index.html` composes via `wp:pattern`.
+  Editor gate: **PASS** (template + server-rendered pattern). Frontend: both images 200.
+- **Theme B (media-import model)**: `wp media import` + absolute URL in
+  `templates/index.html`. Worked while the port was stable (gate PASS, image 200), but:
+  1. `wp media import` only sees files inside the mounted VFS (a `/tmp` path fails:
+     "File doesn't exist") — extra copy step into a mount.
+  2. The attachment **guid bakes in the junk ephemeral Playground port** (`:41299`, not the
+     real `:9404`) — the exact `siteurl` trap local-sites.md warns about; any URL derived
+     from the DB is poisoned at import time.
+  3. **Falsifier hit — port change breaks it**: after `stop` + `ensure` landing on a new
+     port (9405), theme B's markup still pointed at `:9404` → image 404/refused. Theme A on
+     the same restart re-resolved to `:9405` → 200. Deploy would need search-replace on
+     every port change and every environment move.
+- **Decision: (a).** Image-bearing sections live in PHP patterns referencing
+  `assets/<name>.png` via `get_theme_file_uri()`; templates compose them with
+  `wp:pattern`. Self-contained, deployable, port-proof, gate-clean. `AI_IMAGE:` markers go
+  in the `alt` attribute inside pattern PHP files (adapted Telex contract: `.png` not
+  `.jpg`, no `theme:./assets/` prefix). Evidence: this section; artifacts at
+  /tmp/spike3-assets, /tmp/spike-images.
