@@ -1,5 +1,9 @@
 # Handoff: implement the `wordpress/` skill (Phase 2, local-first scope)
 
+> **Status (2026-06-12): COMPLETED** — the `wordpress/` skill shipped. Kept as the record of
+> the Phase 2 contract. One rule is superseded: "no image-generation policy" no longer holds;
+> image generation has its own contract in `exploration2/HANDOFF-images.md`.
+
 You are implementing a WordPress skill for CLI coding agents (Claude Code, Codex, Gemini CLI,
 pi). The research phase is complete; your job is to write the skill. This document is the
 contract. Where it conflicts with your instincts, this document wins — every rule in it was
@@ -156,7 +160,8 @@ rules. The content filter is in PLAN.md — re-read it before each file.
   stay local or use the WP.com UI" note in SKILL.md.
 - No new wrapper scripts beyond the three shipped ones.
 - No edits to playground.sh / wpcom-backup.sh / checker (flag issues instead).
-- No design-previews workflow, no subagent choreography, no image-generation policy.
+- No design-previews workflow, no subagent choreography, no image-generation policy
+  (image generation: SUPERSEDED 2026-06-12 — see `exploration2/HANDOFF-images.md`).
 - Don't run the Phase 3 eval matrix — that's the next phase, not this handoff.
 
 Commit in small pieces (scripts copy, then each reference, then SKILL.md), with the smoke-test
