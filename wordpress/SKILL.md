@@ -21,7 +21,7 @@ Run `scripts/playground.sh` from the project directory (its state lives in `./.p
 | Run/create a local site, any server lifecycle or wp-cli need, Playground facts | `references/local-sites.md` |
 | Write or edit ANY block markup (templates, parts, patterns, post content) | `references/block-markup.md` |
 | Build a theme: structure, theme.json, fonts, patterns, navigation, query loops | `references/themes-and-patterns.md` |
-| New site / redesign design choices; verify and polish rendered output | `references/design.md` |
+| New site / redesign (browser design previews + selection); polish rendered output | `references/design.md` |
 | Anything destructive on a site the user calls production | `references/backups-and-safety.md` |
 
 ## Non-negotiable rules
@@ -39,3 +39,6 @@ Run `scripts/playground.sh` from the project directory (its state lives in `./.p
 4. **Never edit WordPress core.** `wp search-replace` always dry-runs first.
 5. **Always stop servers you started** — `playground.sh stop` asserts cleanup; it must
    print "stopped clean".
+6. **For new sites/redesigns, users choose from rendered HTML previews in a browser**
+   (`references/design.md`) — never from text directions, terminal option lists, or ASCII
+   mockups.
