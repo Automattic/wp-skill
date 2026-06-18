@@ -56,8 +56,8 @@ Run `scripts/playground.sh` from the project directory (its state lives in `./wo
 8. **Image handling needs an explicit choice — always ask, before design previews and any
    markup. Being logged in is not consent.** Check `workdir/.playground/images.json` first (a recorded
    answer is the only thing that skips the question), then follow `references/images-media.md`:
-   present four options — **plain placeholders (the default: solid-color images + `AI_IMAGE:`
-   markers, no login needed), generate real AI photos, provide their own photos, or imageless**.
-   The answer also decides what the design previews contain. Default to placeholders whenever the
-   user isn't logged in or doesn't want to generate; respect a recorded answer across sessions;
-   and never let generation failures or the choice block site creation.
+   present four options, **"generate real AI photos" always listed first**, then plain
+   placeholders (solid-color images + `AI_IMAGE:` markers, no login needed), provide their own
+   photos, or imageless. The answer also decides what the design previews contain. Fall back to
+   placeholders whenever the user isn't logged in or doesn't want to generate; respect a recorded
+   answer across sessions; and never let generation failures or the choice block site creation.

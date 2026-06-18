@@ -12,8 +12,9 @@
  *                             — the token never transits the chat. The token is NOT echoed.
  *   status                    who is logged in + a live check of whether this token can actually
  *                             generate (the endpoint is Automatticians-only during launch).
- *   generate --files <f...>   scan theme files for AI_IMAGE alt markers, generate each into
- *                             <theme>/assets/<name>.png, rewrite alts to human text.
+ *   generate --files <f...> [--concurrency N]   scan theme files for AI_IMAGE alt markers,
+ *                             generate each into <theme>/assets/<name>.png (in batches of N,
+ *                             default 4), rewrite alts to human text.
  *   generate --prompt <p> --out <file.png> [--aspect <a>]   ad-hoc single image.
  *   placeholders --files <f...>   no auth, no network: write a solid-color PNG at each marker's
  *                             aspect ratio and KEEP the AI_IMAGE marker, so the layout renders
@@ -425,69 +426,87 @@ async function cmdGenerate(args) {
   }
 
   // ---- batch over theme files ----
+  // Collect file args up to the next flag, so `--files a.php b.php --concurrency 4` doesn't
+  // swallow the "4" as a filename.
   const fi = args.indexOf('--files');
-  const files = fi === -1 ? [] : args.slice(fi + 1).filter(a => !a.startsWith('--'));
-  if (!files.length) { console.error('Usage: generate --files <theme files...>  (or --prompt/--out)'); process.exit(2); }
+  const files = [];
+  if (fi !== -1) for (let k = fi + 1; k < args.length && !args[k].startsWith('--'); k++) files.push(args[k]);
+  if (!files.length) { console.error('Usage: generate --files <theme files...> [--concurrency N]  (or --prompt/--out)'); process.exit(2); }
+  const concurrency = Math.max(1, parseInt(get('--concurrency'), 10) || 4);
 
   const jobs = scanMarkers(files);
   if (!jobs.length) { console.log('No AI_IMAGE markers found — nothing to do.'); return; }
 
-  const done = new Set(); const failures = [];
+  const failures = [];
   let stopped = null; let exitCode = 1;
+  const labelOf = (job) => `${path.basename(job.file)} -> ${job.target ? path.relative(process.cwd(), job.target) : '?'}`;
 
-  for (const job of jobs) {
-    const label = `${path.basename(job.file)} -> ${job.target ? path.relative(process.cwd(), job.target) : '?'}`;
-    if (job.error) { failures.push(`${label} — bad marker: ${job.error}`); continue; }
+  for (const job of jobs.filter(j => j.error)) failures.push(`${labelOf(job)} — bad marker: ${job.error}`);
 
-    if (stopped) { ensurePlaceholder(job, failures, `${label} — not attempted (${stopped})`); continue; }
+  // Group markers by target file. The FIRST marker for a target is the generator (its prompt
+  // drives the one image); every marker sharing that target gets its alt rewritten once the
+  // image exists. Grouping dedups targets so concurrent workers never race on the same file.
+  const targets = new Map(); // target -> { gen, jobs: [], real?, attempted? }
+  for (const job of jobs.filter(j => !j.error)) {
+    const g = targets.get(job.target);
+    if (g) g.jobs.push(job); else targets.set(job.target, { gen: job, jobs: [job] });
+  }
 
-    if (fs.existsSync(job.target) && !isPlaceholder(job.target) && !done.has(job.target)) {
-      console.log(`skip (exists): ${label}`);
-      rewriteAlt(job.file, job.marker, job.description);
-      done.add(job.target);
-      continue;
+  // Targets already holding a real (non-placeholder) image are left alone; the rest need work.
+  const toGenerate = [];
+  for (const entry of targets.values()) {
+    if (fs.existsSync(entry.gen.target) && !isPlaceholder(entry.gen.target)) {
+      console.log(`skip (exists): ${labelOf(entry.gen)}`);
+      entry.real = true;
+    } else {
+      toGenerate.push(entry);
     }
-    if (done.has(job.target)) { rewriteAlt(job.file, job.marker, job.description); continue; }
+  }
 
-    process.stdout.write(`generating ${label} (${job.aspect}) ... `);
-    let res;
-    try { res = await generateOne(tok, buildPrompt(job.description, job.style), job.aspect); }
-    catch (e) { res = { ok: false, status: 0, message: redact(e.message, tok.access_token) }; }
+  // Generate in fixed batches of `concurrency` (default 4). After each batch, if a hard stop
+  // (needs-login / launch-gate / quota) was hit, stop launching new batches — requests already
+  // in flight in the current batch finish and are handled normally.
+  const stop = (reason, code) => { if (!stopped) { stopped = reason; if (code) exitCode = code; } };
+  for (let i = 0; i < toGenerate.length && !stopped; i += concurrency) {
+    const batch = toGenerate.slice(i, i + concurrency);
+    console.log(`generating ${i + 1}-${i + batch.length} of ${toGenerate.length} (up to ${concurrency} at once) ...`);
+    await Promise.all(batch.map(async (entry) => {
+      const job = entry.gen;
+      entry.attempted = true;
+      let res;
+      try { res = await generateOne(tok, buildPrompt(job.description, job.style), job.aspect); }
+      catch (e) { res = { ok: false, status: 0, message: redact(e.message, tok.access_token) }; }
+      if (res.ok) {
+        writeFileAtomic(job.target, res.buf);
+        entry.real = true;
+        console.log(`  ok: ${labelOf(job)} (${job.aspect})`);
+        return;
+      }
+      const verdict = classify(res.status, res.code, res.message);
+      console.log(`  FAILED (HTTP ${res.status || 'network'}): ${labelOf(job)}`);
+      if (verdict === 'login') { stop('needs login', 2); ensurePlaceholder(job, failures, `${labelOf(job)} — needs login`); return; }
+      if (verdict === 'forbidden') { stop('not authorized (launch gate)', 4); ensurePlaceholder(job, failures, `${labelOf(job)} — not authorized (Automatticians only)`); return; }
+      if (verdict === 'quota') { stop('monthly quota exceeded'); ensurePlaceholder(job, failures, `${labelOf(job)} — monthly quota exceeded`); return; }
+      // Upstream generation failure (content moderation or a temporary Gemini/proxy outage; the
+      // endpoint passes the status through) or network error: placeholder, keep marker, continue.
+      ensurePlaceholder(job, failures, `${labelOf(job)} — generation failed (HTTP ${res.status || 'network'}${res.message ? `: ${res.message}` : ''}; could be content moderation or a temporary outage)`);
+    }));
+  }
 
-    if (res.ok) {
-      writeFileAtomic(job.target, res.buf);
-      rewriteAlt(job.file, job.marker, job.description);
-      done.add(job.target);
-      console.log('ok');
-      continue;
+  // Anything we never launched because we stopped early gets a placeholder so the site renders.
+  if (stopped) {
+    for (const entry of toGenerate) {
+      if (!entry.attempted && !entry.real) ensurePlaceholder(entry.gen, failures, `${labelOf(entry.gen)} — not attempted (stopped: ${stopped})`);
     }
-    console.log(`FAILED (HTTP ${res.status || 'network error'})`);
-    const verdict = classify(res.status, res.code, res.message);
-    if (verdict === 'login') {
-      console.error(`\nAuthentication rejected (${res.message || 'token revoked or expired'}). ${authHint()}`);
-      console.error('Stopping — markers and placeholders are kept; re-run generate after auth to resume.');
-      stopped = 'stopped: needs login'; exitCode = 2;
-      ensurePlaceholder(job, failures, `${label} — needs login`);
-      continue;
-    }
-    if (verdict === 'forbidden') {
-      console.error(`\nAccess denied (${res.message || 'Automatticians only during launch'}). Image generation is currently limited to Automatticians.`);
-      console.error('Stopping — markers and placeholders are kept so the site still renders.');
-      stopped = 'stopped: not authorized (launch gate)'; exitCode = 4;
-      ensurePlaceholder(job, failures, `${label} — not authorized (Automatticians only)`);
-      continue;
-    }
-    if (verdict === 'quota') {
-      console.error(`\nMonthly image quota exhausted (${res.message || '429'}). It resets at the start of next month.`);
-      console.error('Stopping the batch — re-run generate next month to fill the remaining placeholders.');
-      stopped = 'stopped: quota exceeded';
-      ensurePlaceholder(job, failures, `${label} — monthly quota exceeded`);
-      continue;
-    }
-    // Upstream generation failure (could be content moderation or a temporary Gemini/proxy
-    // outage; the endpoint passes through the upstream status) or network error: placeholder,
-    // keep the marker, continue the batch.
-    ensurePlaceholder(job, failures, `${label} — generation failed (HTTP ${res.status || 'network'}${res.message ? `: ${res.message}` : ''}; could be content moderation or a temporary outage)`);
+    if (stopped === 'needs login') console.error(`\nAuthentication rejected. ${authHint()}\nStopped — markers and placeholders are kept; re-run generate after auth to resume.`);
+    else if (stopped === 'not authorized (launch gate)') console.error('\nAccess denied — image generation is currently limited to Automatticians. Stopped; placeholders keep the site rendering.');
+    else if (stopped === 'monthly quota exceeded') console.error('\nMonthly image quota exhausted — it resets at the start of next month. Stopped the batch.');
+  }
+
+  // Rewrite alts to human text only where a real image is present; placeholdered targets keep
+  // their AI_IMAGE markers so a later run can fill them in.
+  for (const entry of targets.values()) {
+    if (entry.real) for (const j of entry.jobs) rewriteAlt(j.file, j.marker, j.description);
   }
 
   if (failures.length) {
@@ -565,7 +584,7 @@ try {
   else if (cmd === 'generate') await cmdGenerate(rest);
   else if (cmd === 'placeholders') await cmdPlaceholders(rest);
   else {
-    console.log('Usage: wpcom-images.mjs <auth | status | generate --files <f...> | generate --prompt <p> --out <f.png> [--aspect <a>] | placeholders --files <f...>>');
+    console.log('Usage: wpcom-images.mjs <auth | status | generate --files <f...> [--concurrency N] | generate --prompt <p> --out <f.png> [--aspect <a>] | placeholders --files <f...>>');
     process.exit(cmd ? 2 : 0);
   }
 } catch (e) {

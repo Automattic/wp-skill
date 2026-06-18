@@ -7,8 +7,8 @@ entirely for small edits, or if the user says to skip — then proceed with your
 direction and say which you chose.
 
 **First, resolve image handling** (`references/images-media.md`): ask the user — always, even
-when already logged in — how to handle imagery, presenting the four options (plain placeholders
-[the default], generate AI photos, provide their own, or imageless). The answer changes what the
+when already logged in — how to handle imagery, presenting the four options (generate AI photos
+first, then plain placeholders, provide their own, or imageless). The answer changes what the
 previews contain (real images, solid placeholder blocks, or CSS-only heroes), so it must be
 settled *before* you render previews, not after a direction is picked.
 
