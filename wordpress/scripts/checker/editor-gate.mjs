@@ -1,12 +1,23 @@
 import { chromium } from 'playwright';
 import { readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
+
+// Prefer Playwright's bundled Chromium; if it isn't installed (e.g. `npx playwright install`
+// was blocked by a sandboxed network), fall back to the system-installed Chrome.
+async function launchBrowser() {
+  try { return await chromium.launch(); }
+  catch (e) {
+    if (/Executable doesn't exist|playwright install/i.test(String(e))) return await chromium.launch({ channel: 'chrome' });
+    throw e;
+  }
+}
+
 const [,, baseUrl, themeDir] = process.argv;
 const files = [];
 for (const sub of ['templates', 'parts']) {
   try { for (const f of readdirSync(join(themeDir, sub))) if (f.endsWith('.html')) files.push(join(themeDir, sub, f)); } catch {}
 }
-const browser = await chromium.launch();
+const browser = await launchBrowser();
 const page = await browser.newPage();
 await page.goto(baseUrl + '/wp-admin/post-new.php', { waitUntil: 'domcontentloaded', timeout: 60000 });
 await page.waitForFunction('window.wp && wp.blocks && wp.blocks.parse && wp.data', null, { timeout: 30000 });

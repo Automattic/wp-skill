@@ -128,11 +128,12 @@ The rendered page often differs from the markup you wrote (WordPress injects lay
 and owns spacing). Diagnose from the rendered DOM, then fix in one batch:
 
 1. **Screenshot both viewports** (server must be running; Playwright handles Playground's
-   session cookie automatically). From `scripts/checker/` (after `npm install` and
-   `npx playwright install chromium`):
+   session cookie automatically). After `npm install` in `scripts/checker/` (and, if available,
+   `npx playwright install chromium` — `shot.mjs` falls back to your system Chrome when that
+   download is blocked). Each shot is full-page at the given width:
    ```bash
-   npx playwright screenshot --viewport-size=1280,900 "$URL" desktop.png
-   npx playwright screenshot --viewport-size=390,844  "$URL" mobile.png
+   node <skill-dir>/scripts/checker/shot.mjs "$URL" desktop.png 1280 900
+   node <skill-dir>/scripts/checker/shot.mjs "$URL" mobile.png  390  844
    ```
 2. **Diagnose every section before fixing anything.** For each issue the screenshots show,
    inspect the live DOM and computed styles (Playwright `page.evaluate` with
