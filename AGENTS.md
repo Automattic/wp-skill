@@ -47,13 +47,13 @@ is only the non-obvious stuff about *developing* the skill.
   remove the `// TODO: REMOVE BEFORE PROD` Automatticians gate, and confirm `MAX_MONTHLY_REGULAR`
   (200 is a placeholder). The skill must keep working (placeholders) for non-a8c users regardless.
 
-## Reading the backing wpcom code (`github.a8c.com`)
+## Backing endpoint code
 
-Firewalled. **`gh` cannot reach it** (Go binary bypasses `proxychains`). Working method: the
-`proxya8c` SOCKS proxy on `127.0.0.1:8080` + `curl --socks5-hostname` + a `gh` token with `repo`
-scope (`gh auth token --hostname github.a8c.com`). REST base is `/api/v3`; raw files via
-`Accept: application/vnd.github.v3.raw`. (Note: `public-api.wordpress.com` itself is **not**
-firewalled — reachable directly.)
+The image endpoint is served from a **different repo** — `Automattic/wpcom` on the internal
+`github.a8c.com` ([backing PR #223791](https://github.a8c.com/Automattic/wpcom/pull/223791)).
+That host is Automattic-internal and firewalled; reaching it needs internal network access and the
+mechanics are environment-specific (keep them in your own local notes, not here). The runtime
+endpoint `public-api.wordpress.com` is **not** firewalled — reachable directly.
 
 ## Repo / PRs
 
