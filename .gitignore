@@ -1,2 +1,2 @@
-# Local, machine-specific agent notes (see AGENTS.md for the shared handoff)
-CLAUDE.local.md
+# Per-developer machine-specific agent notes (imported by CLAUDE.md; shared handoff is AGENTS.md)
+AGENTS.local.md
