@@ -30,8 +30,9 @@ and the site's actual WP version are invisible to it.
 node scripts/checker/editor-gate.mjs <site-url> <theme-dir>
 ```
 
-This opens the live site's editor (Playwright; one-time `npx playwright install chromium`
-in `scripts/checker/`) and validates every template, part, and **server-rendered pattern**
+This opens the live site's editor (Playwright; run `npx playwright install chromium` once in
+`scripts/checker/`, or — when that download is blocked — it falls back to your system-installed
+Chrome) and validates every template, part, and **server-rendered pattern**
 against the site's full block registry. It must print `GATE PASS`. Then check rendered
 layout with a screenshot (see `design.md`) — the gate catches invalid blocks, not a hero
 rendering with gutters.
