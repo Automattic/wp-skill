@@ -12,7 +12,7 @@ user to the WordPress.com UI.
 
 Requirements: Node 18+ and a POSIX shell (macOS/Linux/WSL — native Windows is unsupported).
 Script paths below are relative to this skill directory; resolve them to absolute paths.
-Run `scripts/playground.sh` from the project directory (its state lives in `./.playground/`).
+Run `scripts/playground.sh` from the project directory (its state lives in `./workdir/.playground/`).
 
 ## Routing
 
@@ -22,7 +22,7 @@ Run `scripts/playground.sh` from the project directory (its state lives in `./.p
 | Write or edit ANY block markup (templates, parts, patterns, post content) | `references/block-markup.md` |
 | Build a theme: structure, theme.json, fonts, patterns, navigation, query loops | `references/themes-and-patterns.md` |
 | New site / redesign (browser design previews + selection); polish rendered output | `references/design.md` |
-| Images for a site: generate (AI via the user's Telex login), add, or remove | `references/images-media.md` |
+| Images for a site: generate (AI via the user's WordPress.com login), add, or remove | `references/images-media.md` |
 | Anything destructive on a site the user calls production | `references/backups-and-safety.md` |
 
 ## Non-negotiable rules
@@ -45,7 +45,7 @@ Run `scripts/playground.sh` from the project directory (its state lives in `./.p
    user the one-line `playground.sh ensure …` command to bring the site back. (`stop` still
    asserts clean teardown and must print "stopped clean" on the occasions you do run it.)
 6. **End every rendered change by printing a clickable link the user can test.** Print the
-   live URL from the recorded port — `http://127.0.0.1:$(cat .playground/server.port)/` —
+   live URL from the recorded port — `http://127.0.0.1:$(cat workdir/.playground/server.port)/` —
    deep-linked to the part you changed: a section anchor (`…/#<anchor>`), a specific page
    (`…/sample-page/`), or the editor (`…/wp-admin/`) for editor-only work. Default to the
    home page for general or site-wide changes. Always resolve the real running port; never
@@ -53,8 +53,11 @@ Run `scripts/playground.sh` from the project directory (its state lives in `./.p
 7. **For new sites/redesigns, users choose from rendered HTML previews in a browser**
    (`references/design.md`) — never from text directions, terminal option lists, or ASCII
    mockups.
-8. **Image generation needs the user's consent before any markup is written.** Check
-   `.playground/images.json` first and follow `references/images-media.md`: ask once —
-   naming the local token and the browser login — respect a recorded "no" across sessions
-   with a deliberately imageless design, and never let generation failures or a decline
-   block site creation.
+8. **Image handling needs an explicit choice — always ask, before design previews and any
+   markup. Being logged in is not consent.** Check `workdir/.playground/images.json` first (a recorded
+   answer is the only thing that skips the question), then follow `references/images-media.md`:
+   present four options — **plain placeholders (the default: solid-color images + `AI_IMAGE:`
+   markers, no login needed), generate real AI photos, provide their own photos, or imageless**.
+   The answer also decides what the design previews contain. Default to placeholders whenever the
+   user isn't logged in or doesn't want to generate; respect a recorded answer across sessions;
+   and never let generation failures or the choice block site creation.

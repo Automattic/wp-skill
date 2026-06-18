@@ -36,7 +36,7 @@ Create it:
   to rendered content with a loud warning otherwise.
 - **Local Playground site designated production:** `wp db export` **silently no-ops** on
   Playground — the DB artifact is a copy of
-  `$(cat .playground/site-dir)/wp-content/database/.ht.sqlite`. Copy it plus a tar of the
+  `$(cat workdir/.playground/site-dir)/wp-content/database/.ht.sqlite`. Copy it plus a tar of the
   paths you'll touch into the backup dir, then write the manifest by hand in the format
   above.
 

@@ -6,6 +6,12 @@ Before building a new site/theme (or materially redesigning one), run this workf
 entirely for small edits, or if the user says to skip — then proceed with your single best
 direction and say which you chose.
 
+**First, resolve image handling** (`references/images-media.md`): ask the user — always, even
+when already logged in — how to handle imagery, presenting the four options (plain placeholders
+[the default], generate AI photos, provide their own, or imageless). The answer changes what the
+previews contain (real images, solid placeholder blocks, or CSS-only heroes), so it must be
+settled *before* you render previews, not after a direction is picked.
+
 **Never present design directions as terminal text, option lists, or ASCII mockups, and
 never use a terminal select widget for a design choice.** Directions are internal working
 artifacts. The only design artifact a user ever judges is rendered HTML in a real browser.
@@ -31,17 +37,35 @@ For each direction, generate one complete, self-contained HTML document:
   `--content-size: 800px` for text content, `--wide-size: 1280px` for header/hero content;
   only backgrounds run full-viewport. A preview that ignores these renders wider than the
   theme ever will.
-- Hero imagery: if you can generate or source a real image, use it; otherwise build the
-  hero from CSS (gradients, patterns, type-as-image) — no broken `<img>` placeholders.
+- Hero imagery follows the image-handling choice (resolved above, recorded in
+  `workdir/.playground/images.json` — see `references/images-media.md`):
+  - **`yes`** (generate AI): generate a real hero image for *each* direction and use it — a
+    preview that says "yes to images" but renders a CSS gradient misrepresents the design. Derive
+    a prompt from the direction's hero composition + mood and write it into that option's preview
+    dir, e.g. `node <skill-dir>/scripts/wpcom-images.mjs generate --prompt "<hero composition>, <style> style" --aspect 16:9 --out workdir/previews/option-N/hero.png`, then reference it with a
+    relative `<img src="hero.png">` (the gallery is served over HTTP, so relative paths resolve).
+    This is ~4 generations (one per direction), counts against quota, and the chosen direction's
+    hero can be reused. If a generation fails or the endpoint is unavailable, fall back to a
+    placeholder block (next case) for that one preview rather than shipping a gray box.
+  - **`placeholders`** (the default): show a plain solid-color block at the hero's aspect ratio
+    (a CSS block tinted from the direction's palette is fine — no need to write a PNG for the
+    throwaway preview), clearly reading as "photo goes here". The layout, proportions, and
+    chrome are what the user is judging; the real photos land later.
+  - **`own`** (user's photos): if the user already pointed you at a folder, drop a representative
+    image in; otherwise treat it like `placeholders` for the preview.
+  - **`no`** (imageless): build every hero from CSS (gradients, patterns, type-as-image) — no
+    `<img>`, no placeholder blocks, consistent with the imageless contract.
 - Commit fully to the assigned direction. Generate each preview in isolation — a separate
   subagent per direction where the harness supports it, otherwise one at a time, never
   cross-referencing the others. The four must look like they came from different designers.
 
 ### 3. Present a 2×2 gallery in the browser
 
-Write everything to `/tmp/wp-design-previews-<site-slug>-<timestamp>/`:
-`directions.json`, `option-1/preview.html` … `option-4/preview.html`, and `index.html` — a
-2×2 grid of `<iframe>`s, each labeled with its option number and title.
+Write everything to `workdir/previews/` in the project (clear it first if a prior redesign
+left option dirs there): `directions.json`, `option-1/preview.html` … `option-4/preview.html`,
+and `index.html` — a 2×2 grid of `<iframe>`s, each labeled with its option number and title.
+(`workdir/` is the project's gitignored scratch area — persistent across reboots, so generated
+preview images aren't silently wiped from `/tmp` and don't have to be re-generated.)
 
 **Each preview must fill its cell exactly — no dead whitespace beside or below it.** Render
 every iframe at a real desktop viewport (1280×800) and scale it to fit with a *measured*
@@ -75,7 +99,7 @@ its PID — never hardcode or guess a port, and don't substitute `python3 -m htt
 registry may be sandboxed off).
 
 ```bash
-cd /tmp/wp-design-previews-<site-slug>-<timestamp>
+cd workdir/previews
 setsid nohup node <skill-dir>/scripts/serve-dir.mjs . > server.log 2>&1 &
 sleep 1
 URL=$(grep -m1 -o 'http://[0-9.:]*/' server.log)   # e.g. http://127.0.0.1:53412/
@@ -93,9 +117,10 @@ Playground lifecycle).
 ### 4. Carry the selection forward as the first-fold contract
 
 The selected direction text + its `preview.html` are the contract for palette, typography,
-spacing, chrome, and hero composition. Copy both into the project (e.g. `design/` notes)
-before the temp dir is lost. The finished theme's first fold must be recognizably descended
-from the selected preview; the rest of the site extends its visual language.
+spacing, chrome, and hero composition. They persist in `workdir/previews/` (no need to rescue
+them before a temp dir vanishes), so just note which option won — keep the whole gallery around
+for reference. The finished theme's first fold must be recognizably descended from the selected
+preview; the rest of the site extends its visual language.
 
 ## Verify and polish from evidence, not pixels
 
@@ -119,6 +144,6 @@ and owns spacing). Diagnose from the rendered DOM, then fix in one batch:
    changed, then take one verification screenshot pass. Don't screenshot between individual
    edits.
 4. **Hand back live.** Leave the server running and print a clickable URL deep-linked to what
-   you changed — `http://127.0.0.1:$(cat .playground/server.port)/#<anchor>` for a section,
+   you changed — `http://127.0.0.1:$(cat workdir/.playground/server.port)/#<anchor>` for a section,
    `/…/` for a page, the home page for site-wide work (SKILL.md's hand-back-live rules). The
    user tests by clicking; don't stop the server unless they ask.

@@ -3,14 +3,17 @@
 # review cycles failed to keep the markdown version of this correct.
 #
 # Verbs:
-#   playground.sh bootstrap [project-dir]          one-time: create site, record .playground/site-dir
+#   playground.sh bootstrap [project-dir]          one-time: create site, record workdir/.playground/site-dir
 #   playground.sh ensure   [host:vfs ...]          idempotent: converge to a running server (+ mounts)
 #   playground.sh wp -- <wp-cli args>              run wp-cli against the SAME site + SAME mounts
 #   playground.sh stop                             process-group stop + assert nothing survives
 #
-# State (all under .playground/): site-dir, mounts, server.{pid,pgid,port,log}
+# State (all under workdir/.playground/): site-dir, mounts, server.{pid,pgid,port,log}. The whole
+# of workdir/ is the agent's scratch area (previews, staging media, this run-state) and `bootstrap`
+# drops a workdir/.gitignore ('*') so none of it pollutes git — the deliverable theme/plugin live
+# at the project root, not in workdir.
 # Mount consistency is enforced by construction: `ensure` records its extra mounts in
-# .playground/mounts and `wp` replays them. If `ensure` is called with a DIFFERENT mount set
+# workdir/.playground/mounts and `wp` replays them. If `ensure` is called with a DIFFERENT mount set
 # than the live server was started with, the server is RESTARTED with the new set (review 4:
 # the previous version recorded the new mounts but reused the old server — the exact
 # divergence this script exists to prevent; reproduced as an HTTP 500 on 2026-06-11).
@@ -30,7 +33,8 @@ WPCLI_PHAR_URL="https://github.com/wp-cli/wp-cli/releases/download/v2.12.0/wp-cl
 set -euo pipefail
 
 CLI=(npx -y "@wp-playground/cli@${PLAYGROUND_VERSION}")
-PG=.playground
+WORKDIR=workdir
+PG="$WORKDIR/.playground"
 PHAR="$PG/wp-cli.phar"
 
 die() { echo "playground.sh: $*" >&2; exit 1; }
@@ -98,6 +102,8 @@ kill_recorded() {
 cmd_bootstrap() {
   local path="${1:-.}"
   mkdir -p "$PG"
+  # The whole scratch dir stays out of git (deliverables live at the project root, not here).
+  [ -f "$WORKDIR/.gitignore" ] || printf '*\n' > "$WORKDIR/.gitignore"
   if [ -s "$PG/site-dir" ] && [ -d "$(cat "$PG/site-dir")" ]; then
     echo "already bootstrapped: $(cat "$PG/site-dir")"; return 0
   fi
