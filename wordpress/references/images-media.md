@@ -27,17 +27,12 @@ step. The one thing that suppresses the question is an existing recorded answer.
 2. **Ask, regardless of login state — present four options.** Phrase it for the specific site,
    e.g. *"A photo blog needs images to look right while we design it. How do you want to handle
    imagery for the build/previews? (You'll add your own real photos afterward either way.)"* Wait
-   for the answer before continuing. The four options, with their `workdir/.playground/images.json`
-   `images` value:
-   - **Plain placeholders** (`"placeholders"`) — **the default; recommend it first**, and the
-     automatic fallback whenever the user is not logged in or doesn't want to generate now. Build
-     with `AI_IMAGE:` markers, then fill every slot with a solid-color image at the right aspect
-     ratio (`placeholders --files …`, below). The layout looks right immediately, no login or
-     generation needed, and the markers stay so anyone can generate the real images later with
-     one command.
-   - **Generate AI sample photos** (`"yes"`) — real AI generation via the user's WordPress.com
-     login. Resolve the mechanics from `wpcom-images.mjs status` (only now, after the user picked
-     this — never run it as a reason to skip the question):
+   for the answer before continuing. **Present the options in this order — "Generate AI sample
+   photos" is always first** — each with its `workdir/.playground/images.json` `images` value:
+   - **Generate AI sample photos** (`"yes"`) — **always the first option shown** — real AI
+     generation via the user's WordPress.com login. Resolve the mechanics from
+     `wpcom-images.mjs status` (only now, after the user picked this — never run it as a reason to
+     skip the question):
      - **Exit 0** (logged in & allowed): proceed; mention images are generated via their
        WordPress.com login (usage is never silent). `status` actually exercises access (it probes
        the endpoint with an empty prompt), so exit 0 means the token is valid *and* this user may
@@ -50,6 +45,11 @@ step. The one thing that suppresses the question is an existing recorded answer.
        placeholders**, noting real generation can be revisited once the feature opens up.
      - **Exit 3** (unreachable): a network/TLS problem, not auth — say the service is unreachable
        and fall back to **Plain placeholders**.
+   - **Plain placeholders** (`"placeholders"`) — the no-login fallback, and what to default to
+     whenever the user isn't logged in or doesn't want to generate now. Build with `AI_IMAGE:`
+     markers, then fill every slot with a solid-color image at the right aspect ratio
+     (`placeholders --files …`, below). The layout looks right immediately, no login or generation
+     needed, and the markers stay so anyone can generate the real images later with one command.
    - **Provide my own photos** (`"own"`) — the user has photos ready. Ask for a folder path, copy
      the files into the theme's `assets/` (keep the marker filenames so layout/aspect intent is
      preserved), and don't generate anything. No login needed.
@@ -163,6 +163,12 @@ images and replaces only its own placeholders — safe to resume anytime. Expect
 per image; plan a batch ≤ ~10 images per page, mind the 200/month regular-user quota, and confirm
 with the user before generating dozens. After a batch, verify the images actually render
 (cookie-jar curl of the image URLs or a screenshot).
+
+`generate --files` runs **in batches of 4 concurrent requests** (override with `--concurrency N`;
+`N=1` restores one-at-a-time), so a full page finishes in roughly a quarter of the wall-clock
+time. Markers pointing at the same target file generate once and share the result; per-image
+failures still placeholder-and-continue independently, and a `401`/`403`/`429` stops launching
+new batches (in-flight requests finish) — re-run to resume.
 
 ## Failure policy (the script enforces it — don't fight it)
 
