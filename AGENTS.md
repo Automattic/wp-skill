@@ -36,13 +36,21 @@ is only the non-obvious stuff about *developing* the skill.
 ## Image generation (current active area)
 
 - `scripts/wpcom-images.mjs` → WordPress.com `wpcom/v2/ai-image/v1/imagine` (Gemini, server-side).
-  Auth is **OAuth2 implicit-grant**, reusing WordPress Studio's `client_id=95109`. Default flow
-  keeps the agent in the loop: the **agent prints the authorize URL** (`auth-url`), the user pastes
-  the token in chat, and the agent stores it (`auth --token <t>`). This deliberately puts the token
-  in the transcript — the accepted trade-off for not making the user run a command; a user who
-  wants the token kept out of chat runs bare `auth` themselves and pastes into their own stdin. See
-  `references/images-media.md` for the consent flow (4 options, "Generate AI" shown first, plain
-  placeholders as the no-login fallback) and failure policy.
+  Auth is **OAuth2 implicit-grant** with three entry points (see `references/images-media.md`):
+  - **`login` (preferred):** Claude-Code-style loopback flow — local server on `localhost:41763`,
+    opens the browser, captures the token from the redirect, stores it. No copy/paste, token never
+    transits the chat. Needs a **dedicated OAuth app** (`LOOPBACK_CLIENT_ID` / `WPCOM_OAUTH_CLIENT_ID`)
+    whose Redirect URL is exactly `http://localhost:41763/callback` — **not** Studio's `95109`,
+    which only has the `wp-studio://auth` deep link + the copy-oauth-token page (no localhost). Only
+    works when the browser is on the same machine.
+  - **`auth-url` + `auth --token <t>` (fallback):** agent prints the link, user pastes the token in
+    chat, agent stores it. Puts the token in the transcript — the trade-off for a no-command flow.
+  - **bare `auth` (fallback):** user runs it themselves and pastes into their own stdin; token stays
+    out of the chat. Use for remote/SSH sessions.
+
+  Reusing `95109` for `login` is impossible (no localhost redirect); that's why `login` needs its
+  own app. See `references/images-media.md` for the consent flow (4 options, "Generate AI" shown
+  first, plain placeholders as the no-login fallback) and failure policy.
 - **The endpoint is GA — open to all WordPress.com users at 200 images/month.** No Automatticians
   gate anymore; don't reintroduce one (no `forbidden`/exit-4/403-launch-gate paths). The skill
   must still keep working (placeholders) for users who can't or won't log in.

@@ -4,6 +4,12 @@
  *
  * Node 18+, zero dependencies (built-in fetch). Subcommands:
  *
+ *   login                     Claude-Code-style browser login: open a local loopback server, send
+ *                             the user to WordPress.com, capture the token from the redirect, and
+ *                             store it — NO copy/paste, token never transits the chat. Needs a
+ *                             dedicated OAuth app (LOOPBACK_CLIENT_ID / WPCOM_OAUTH_CLIENT_ID); if
+ *                             unset, it prints how to register one. Requires the browser to be on
+ *                             the same machine; for remote/SSH use `auth` instead.
  *   auth-url                  print ONLY the authorize URL (no stdin, no network). The agent can
  *                             run this and relay the link in chat — the URL is not secret.
  *   auth [--token <t>]        one-time login (OAuth2 implicit grant, the same flow the WordPress
@@ -52,6 +58,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import zlib from 'node:zlib';
+import http from 'node:http';
+import crypto from 'node:crypto';
+import { spawn } from 'node:child_process';
 
 const API_BASE = process.env.WPCOM_API_BASE || 'https://public-api.wordpress.com/';
 const OAUTH_AUTHORIZE = 'https://public-api.wordpress.com/oauth2/authorize';
@@ -60,6 +69,17 @@ const CLIENT_ID = '95109'; // WordPress Studio's WordPress.com OAuth app — its
                            // ai-image endpoint (logged-in WordPress.com user).
 const OAUTH_SCOPE = 'global';
 const OAUTH_REDIRECT = 'https://developer.wordpress.com/copy-oauth-token';
+
+// --- loopback browser login (`login`): Claude-Code-style, no copy/paste ---
+// This needs a DEDICATED WordPress.com OAuth app, NOT Studio's 95109 — that client only has the
+// `wp-studio://auth` deep link and the copy-oauth-token page registered, no http://localhost.
+// Register one at https://developer.wordpress.com/apps/ with Redirect URL EXACTLY:
+//   http://localhost:41763/callback
+// then paste its client_id here (or set WPCOM_OAUTH_CLIENT_ID). client_ids are not secret; no
+// client secret is used (implicit grant). The port/path below MUST match the registered URL.
+const LOOPBACK_CLIENT_ID = process.env.WPCOM_OAUTH_CLIENT_ID || '142242'; // dedicated wp-skill OAuth app
+const LOOPBACK_PORT = Number(process.env.WPCOM_OAUTH_PORT) || 41763;
+const LOOPBACK_REDIRECT = `http://localhost:${LOOPBACK_PORT}/callback`;
 const AI_FEATURE = 'ai-image-cli'; // server-side allowlisted; anything else collapses to default
 
 const IMAGINE_PATH = 'wpcom/v2/ai-image/v1/imagine';
@@ -308,6 +328,124 @@ async function cmdAuth(args = []) {
     user_id: v.me.ID || null,
   });
   console.log(`\nAuthorized as ${v.me.username || v.me.display_name || 'unknown user'}. Token stored at ${tokenPath()} (never commit or print it).`);
+}
+
+// ---------- login (loopback browser flow — no copy/paste) ----------
+
+function loopbackAuthorizeUrl(state) {
+  const u = new URL(OAUTH_AUTHORIZE);
+  u.searchParams.set('response_type', 'token');
+  u.searchParams.set('client_id', LOOPBACK_CLIENT_ID);
+  u.searchParams.set('redirect_uri', LOOPBACK_REDIRECT);
+  u.searchParams.set('scope', OAUTH_SCOPE);
+  u.searchParams.set('state', state);
+  return u.toString();
+}
+
+function openBrowser(url) {
+  // Best-effort: the URL is also printed so a failed open is never fatal.
+  const p = process.platform;
+  const [cmd, args] = p === 'darwin' ? ['open', [url]]
+    : p === 'win32' ? ['cmd', ['/c', 'start', '', url]]
+    : ['xdg-open', [url]];
+  try {
+    const child = spawn(cmd, args, { stdio: 'ignore', detached: true });
+    child.on('error', () => {});
+    child.unref();
+  } catch {}
+}
+
+// Capture the token via a loopback redirect. The implicit grant returns it in the URL FRAGMENT,
+// which the browser never sends to the server — so /callback serves a tiny page that reads
+// location.hash and POSTs it back to /token. A random `state` guards against a stray request.
+function awaitLoopbackToken(state, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    let timer;
+    const server = http.createServer((req, res) => {
+      const url = new URL(req.url, LOOPBACK_REDIRECT);
+      if (req.method === 'GET' && url.pathname === '/callback') {
+        res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+        res.end(`<!doctype html><meta charset=utf-8><title>WordPress.com login</title>
+<body style="font-family:system-ui,sans-serif;max-width:32rem;margin:4rem auto;text-align:center">
+<h2 id=m>Finishing login…</h2>
+<script>
+  fetch('/token',{method:'POST',headers:{'content-type':'text/plain'},body:location.hash.substring(1)})
+    .then(function(r){return r.text();})
+    .then(function(t){document.getElementById('m').textContent=t;})
+    .catch(function(){document.getElementById('m').textContent='Something went wrong — return to the terminal.';});
+</script></body>`);
+        return;
+      }
+      if (req.method === 'POST' && url.pathname === '/token') {
+        let body = '';
+        req.on('data', (c) => { body += c; if (body.length > 8192) req.destroy(); });
+        req.on('end', () => {
+          const p = new URLSearchParams(body);
+          const reply = (msg) => { res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' }); res.end(msg); };
+          const token = p.get('access_token');
+          if (p.get('error')) { reply('Login was denied. You can close this tab.'); finish(new Error(`authorization denied (${p.get('error')})`)); return; }
+          if (!token) { reply('No token found in the redirect. You can close this tab.'); finish(new Error('no access_token in redirect')); return; }
+          if (p.get('state') !== state) { reply('Login state mismatch. You can close this tab.'); finish(new Error('state mismatch — request rejected')); return; }
+          reply('Login complete — you can close this tab and return to the terminal.');
+          finish(null, token);
+        });
+        return;
+      }
+      res.writeHead(404); res.end();
+    });
+
+    const finish = (err, token) => {
+      clearTimeout(timer);
+      try { server.closeAllConnections?.(); } catch {}
+      server.close(() => (err ? reject(err) : resolve(token)));
+    };
+
+    server.on('error', (e) => { clearTimeout(timer); reject(e); });
+    server.listen(LOOPBACK_PORT, '127.0.0.1', () => {
+      const authUrl = loopbackAuthorizeUrl(state);
+      console.log('Opening your browser to log in to WordPress.com…');
+      console.log(`\nIf it doesn't open, click this link:\n\n  ${authUrl}\n`);
+      openBrowser(authUrl);
+    });
+    timer = setTimeout(() => finish(new Error(`timed out after ${Math.round(timeoutMs / 1000)}s waiting for the browser login`)), timeoutMs);
+  });
+}
+
+async function cmdLogin() {
+  if (!LOOPBACK_CLIENT_ID) {
+    console.error('Browser login needs a dedicated WordPress.com OAuth app (Studio\'s client has no localhost redirect).');
+    console.error('Register one at https://developer.wordpress.com/apps/ with Redirect URL EXACTLY:');
+    console.error(`  ${LOOPBACK_REDIRECT}`);
+    console.error('then set WPCOM_OAUTH_CLIENT_ID=<client_id> (or hard-code LOOPBACK_CLIENT_ID in this script) and re-run.');
+    console.error('Fallback that needs no app: `auth` (manual token paste).');
+    process.exit(2);
+  }
+  const state = crypto.randomBytes(16).toString('hex');
+  const timeoutMs = Number(process.env.WPCOM_OAUTH_TIMEOUT_MS) || 180000;
+
+  let token;
+  try {
+    token = await awaitLoopbackToken(state, timeoutMs);
+  } catch (e) {
+    console.error(`\nBrowser login failed: ${e.message}`);
+    if (/EADDRINUSE/.test(e.message)) console.error(`Port ${LOOPBACK_PORT} is busy — close whatever is using it, or set WPCOM_OAUTH_PORT (and register that port's redirect URL too).`);
+    console.error('Fallback: `auth` (manual token paste).');
+    process.exit(2);
+  }
+
+  let v;
+  try { v = await validateToken(token); }
+  catch (e) { console.error(`\nGot a token but could not reach ${API_BASE} to validate it (${redact(e.message, token)}).`); process.exit(3); }
+  if (!v.ok) { console.error(`\nThe returned token was rejected (${v.message || `HTTP ${v.status}`}). Re-run login to try again.`); process.exit(2); }
+
+  saveToken({
+    access_token: token,
+    token_type: 'Bearer',
+    api_base_url: API_BASE,
+    username: v.me.username || v.me.display_name || null,
+    user_id: v.me.ID || null,
+  });
+  console.log(`\nLogged in as ${v.me.username || v.me.display_name || 'unknown user'}. Token stored at ${tokenPath()} (never commit or print it).`);
 }
 
 // ---------- status ----------
@@ -588,13 +726,14 @@ function reportHardFailure(res) {
 
 const [, , cmd, ...rest] = process.argv;
 try {
-  if (cmd === 'auth-url') cmdAuthUrl();
+  if (cmd === 'login') await cmdLogin();
+  else if (cmd === 'auth-url') cmdAuthUrl();
   else if (cmd === 'auth') await cmdAuth(rest);
   else if (cmd === 'status') await cmdStatus();
   else if (cmd === 'generate') await cmdGenerate(rest);
   else if (cmd === 'placeholders') await cmdPlaceholders(rest);
   else {
-    console.log('Usage: wpcom-images.mjs <auth-url | auth [--token <t>] | status | generate --files <f...> [--concurrency N] | generate --prompt <p> --out <f.png> [--aspect <a>] | placeholders --files <f...>>');
+    console.log('Usage: wpcom-images.mjs <login | auth-url | auth [--token <t>] | status | generate --files <f...> [--concurrency N] | generate --prompt <p> --out <f.png> [--aspect <a>] | placeholders --files <f...>>');
     process.exit(cmd ? 2 : 0);
   }
 } catch (e) {

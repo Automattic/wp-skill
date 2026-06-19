@@ -71,33 +71,55 @@ markers and the gray placeholder images **stay** so the site renders — see the
 
 ## Authenticating (OAuth2 implicit grant)
 
-This is the same flow the WordPress Studio CLI uses, reusing Studio's WordPress.com OAuth client
-(`client_id=95109`). There is no device-flow polling: the user opens a URL, approves, and the
-token is stored. The default flow keeps the agent in the loop end-to-end:
+WordPress.com OAuth, no device-flow polling. Three ways in, in order of preference.
 
-1. **Print the authorize URL yourself.** Run `auth-url` (a tool call is fine; it reads no stdin and
-   makes no network call) and put the link straight in chat for the user to click. Don't make the
-   user run a command just to *see* the URL.
+### Preferred: `login` (browser, no copy/paste)
 
-   ```
-   node <skill-dir>/scripts/wpcom-images.mjs auth-url
-   ```
+The Claude-Code-style flow — the user logs in in their browser and **nothing is pasted anywhere**;
+the token lands only in the local token file (not the chat, not the clipboard). Just run it:
 
-2. **Wait for the user to paste the token, then store it.** They approve, land on
-   `developer.wordpress.com/copy-oauth-token` (which shows the access token), and paste it as their
-   next chat message. Store it with `auth --token`:
+```
+node <skill-dir>/scripts/wpcom-images.mjs login
+```
 
-   ```
-   node <skill-dir>/scripts/wpcom-images.mjs auth --token <PASTED_TOKEN>
-   ```
+It starts a loopback server on `localhost:41763`, opens the browser to WordPress.com (and prints
+the link as a fallback), captures the token from the redirect, validates it, and stores it. It
+blocks until the user finishes or it times out (~180 s), so run it with a generous tool timeout.
 
-   This validates the token against `/me` and stores it. The token is never echoed back, but note
-   this path **does put the token in the chat transcript** — that's the accepted trade-off for not
-   making the user run a command. If a user would rather keep the token out of the chat, they can
-   run `auth` (no `--token`) themselves with the `! ` prefix and paste it into their own stdin
-   instead.
+Two requirements, or `login` exits 2 and tells you to fall back:
+- **A dedicated OAuth app must be configured** (`LOOPBACK_CLIENT_ID` in the script, or
+  `WPCOM_OAUTH_CLIENT_ID`). This is *not* Studio's `95109` — that client has no localhost redirect.
+  The app's Redirect URL must be exactly `http://localhost:41763/callback`. If `login` reports no
+  client_id is set, the app hasn't been wired up yet — use a fallback below.
+- **The browser must be on the same machine** as the skill. Over SSH/remote/web, loopback can't be
+  reached — use a fallback.
 
-After storing, re-run `status` to confirm (exit 0). Never auto-open a browser. If a token ever
+### Fallback A: agent prints the link, user pastes the token in chat
+
+When `login` isn't available (no app configured, or remote session). Print the URL yourself, then
+store the token the user pastes back:
+
+```
+node <skill-dir>/scripts/wpcom-images.mjs auth-url            # print the link (no stdin/network)
+node <skill-dir>/scripts/wpcom-images.mjs auth --token <T>    # store the pasted token
+```
+
+The token is never echoed, but this **does put it in the chat transcript** — the trade-off for not
+making the user run a command.
+
+### Fallback B: user runs `auth` themselves (token never in chat)
+
+Most private. The user runs it with the `! ` prefix so the token is read from their own stdin:
+
+```
+! node <skill-dir>/scripts/wpcom-images.mjs auth
+```
+
+It prints the URL, the user approves on `developer.wordpress.com/copy-oauth-token`, and pastes the
+token at the local prompt.
+
+After storing (any path), re-run `status` to confirm (exit 0). Only `login` opens a browser, and
+only when the user invoked that flow — don't auto-open one for the paste fallbacks. If a token ever
 needs to be invalidated, see "Revocation" below.
 
 ## Where image markup lives: PHP patterns, never Media Library imports
