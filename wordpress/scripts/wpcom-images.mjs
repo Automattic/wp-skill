@@ -4,14 +4,16 @@
  *
  * Node 18+, zero dependencies (built-in fetch). Subcommands:
  *
+ *   auth-url                  print ONLY the authorize URL (no stdin, no network). The agent can
+ *                             run this and relay the link in chat — the URL is not secret.
  *   auth                      one-time login (OAuth2 implicit grant + manual token paste, the
- *                             same flow the WordPress Studio CLI uses). Prints an authorize URL
+ *                             same flow the WordPress Studio CLI uses). Prints the authorize URL
  *                             the USER opens in their browser; after approving, WordPress.com
  *                             shows the token on a copy page; the user pastes it back. Read from
  *                             stdin, so the USER should run this themselves (e.g. `! node … auth`)
  *                             — the token never transits the chat. The token is NOT echoed.
  *   status                    who is logged in + a live check of whether this token can actually
- *                             generate (the endpoint is Automatticians-only during launch).
+ *                             generate.
  *   generate --files <f...> [--concurrency N]   scan theme files for AI_IMAGE alt markers,
  *                             generate each into <theme>/assets/<name>.png (in batches of N,
  *                             default 4), rewrite alts to human text.
@@ -25,8 +27,8 @@
  *   headers: Authorization: Bearer <token>, X-WPCOM-AI-Feature: ai-image-cli
  *   body:    { prompt, aspect_ratio?, output_format? }
  *   200:     { data: [ { b64_json, revised_prompt } ] }   (b64_json = base64 PNG bytes)
- *   Model is Google Gemini "Nano Banana Pro" server-side. Per-user quota: 200/month for regular
- *   users, unlimited for Automatticians; usage is charged only on a successful generation.
+ *   Model is Google Gemini "Nano Banana Pro" server-side. Per-user quota: 200 images/month;
+ *   usage is charged only on a successful generation.
  *
  * Aspect words map square→1:1, landscape→16:9, portrait→9:16; the ratio strings
  * 1:1 | 2:3 | 3:2 | 3:4 | 4:3 | 9:16 | 16:9 | 21:9 pass through unchanged (the endpoint's enum).
@@ -38,12 +40,12 @@
  * placeholder PNG at the right aspect so the site renders, KEEP the marker, continue the batch,
  * list failures at the end (generate resumes idempotently — placeholders are detected and
  * replaced on the next run; real images are skipped). 401 → print the re-auth command and stop.
- * 403 (launch gate: Automatticians only) → stop, the user has no access yet. 429 (quota
- * exceeded) → stop the batch, placeholder the rest, print the reset message, never poll-retry.
+ * 429 (quota exceeded) → stop the batch, placeholder the rest, print the reset message, never
+ * poll-retry.
  *
  * Exit codes: 0 = success/no-op; 1 = some images failed (placeholders written, resumable);
  * 2 = auth needed/failed (no token or 401); 3 = endpoint unreachable (network/TLS — `status`
- * only); 4 = authenticated but not authorized (403 launch gate — Automatticians only).
+ * only).
  */
 
 import fs from 'node:fs';
@@ -154,15 +156,13 @@ function errInfo(json) {
 }
 
 // Classify an imagine response into: 'ok' (token + access valid), 'login' (must re-authenticate),
-// 'forbidden' (authed but the launch gate blocks this user — Automatticians only today),
 // 'quota' (monthly limit hit), 'unknown' (upstream/generation failure). The status `status`
 // command probes with an EMPTY prompt, which the endpoint rejects (400 ai_image_missing_prompt)
-// only AFTER permission_check passes — so a 400-missing-prompt means auth + access are good.
+// only AFTER permission_check passes — so a 400-missing-prompt means auth is good.
 function classify(status, code, message) {
   const c = code || '';
   const m = String(message || '');
   if (status === 401 || /authentication required/i.test(m)) return 'login';
-  if (status === 403 || (c === 'rest_forbidden' && /automattician/i.test(m))) return 'forbidden';
   if (status === 429 || c === 'ai_image_quota_exceeded') return 'quota';
   if (status === 200) return 'ok';
   if (status === 400 && (c === 'ai_image_missing_prompt' || /prompt/i.test(m))) return 'ok';
@@ -259,6 +259,13 @@ async function validateToken(token) {
   return { ok: false, status: res.status, ...errInfo(res.json) };
 }
 
+function cmdAuthUrl() {
+  // Print ONLY the authorize URL (no stdin, no network). The URL is not secret — the agent can
+  // run this and relay the link directly in chat, so the user just clicks it; the token paste
+  // (the one secret step) still happens locally via `auth`.
+  console.log(authorizeUrl());
+}
+
 async function cmdAuth() {
   console.log('Open this URL in your browser to authorize (login is your WordPress.com account):');
   console.log(`\n  ${authorizeUrl()}\n`);
@@ -302,8 +309,8 @@ async function cmdStatus() {
   console.log(`Logged in as ${tok.username || 'unknown'} (WordPress.com).`);
 
   // Real check at zero generation cost: probe imagine with an EMPTY prompt. The endpoint runs
-  // permission_check (login + the Automatticians launch gate) BEFORE it rejects the empty
-  // prompt, so the outcome tells us exactly what this token can do.
+  // permission_check (login) BEFORE it rejects the empty prompt, so the outcome tells us exactly
+  // what this token can do.
   let res;
   try {
     res = await postJson(apiUrl(IMAGINE_PATH), { prompt: '' },
@@ -318,10 +325,6 @@ async function cmdStatus() {
   if (verdict === 'login') {
     console.log(`Credentials: NOT working — ${message || `HTTP ${res.status}`}. ${authHint()}`);
     process.exit(2);
-  }
-  if (verdict === 'forbidden') {
-    console.log(`Access: image generation is currently limited to Automatticians (${message || 'HTTP 403'}). Your login works, but you can't generate images yet.`);
-    process.exit(4);
   }
   if (verdict === 'quota') {
     console.log(`Access: authenticated, but this month's image quota is exhausted (${message || 'HTTP 429'}). It resets at the start of next month.`);
@@ -485,7 +488,6 @@ async function cmdGenerate(args) {
       const verdict = classify(res.status, res.code, res.message);
       console.log(`  FAILED (HTTP ${res.status || 'network'}): ${labelOf(job)}`);
       if (verdict === 'login') { stop('needs login', 2); ensurePlaceholder(job, failures, `${labelOf(job)} — needs login`); return; }
-      if (verdict === 'forbidden') { stop('not authorized (launch gate)', 4); ensurePlaceholder(job, failures, `${labelOf(job)} — not authorized (Automatticians only)`); return; }
       if (verdict === 'quota') { stop('monthly quota exceeded'); ensurePlaceholder(job, failures, `${labelOf(job)} — monthly quota exceeded`); return; }
       // Upstream generation failure (content moderation or a temporary Gemini/proxy outage; the
       // endpoint passes the status through) or network error: placeholder, keep marker, continue.
@@ -499,7 +501,6 @@ async function cmdGenerate(args) {
       if (!entry.attempted && !entry.real) ensurePlaceholder(entry.gen, failures, `${labelOf(entry.gen)} — not attempted (stopped: ${stopped})`);
     }
     if (stopped === 'needs login') console.error(`\nAuthentication rejected. ${authHint()}\nStopped — markers and placeholders are kept; re-run generate after auth to resume.`);
-    else if (stopped === 'not authorized (launch gate)') console.error('\nAccess denied — image generation is currently limited to Automatticians. Stopped; placeholders keep the site rendering.');
     else if (stopped === 'monthly quota exceeded') console.error('\nMonthly image quota exhausted — it resets at the start of next month. Stopped the batch.');
   }
 
@@ -562,10 +563,6 @@ function reportHardFailure(res) {
     console.error(`Authentication rejected (${res.message || 'token revoked or expired'}). ${authHint()}`);
     process.exit(2);
   }
-  if (verdict === 'forbidden') {
-    console.error(`Access denied (${res.message || 'Automatticians only during launch'}). Image generation is currently limited to Automatticians.`);
-    process.exit(4);
-  }
   if (verdict === 'quota') {
     console.error(`Monthly image quota exhausted (${res.message || '429'}). It resets at the start of next month — never retry in a loop.`);
     process.exit(1);
@@ -579,12 +576,13 @@ function reportHardFailure(res) {
 
 const [, , cmd, ...rest] = process.argv;
 try {
-  if (cmd === 'auth') await cmdAuth();
+  if (cmd === 'auth-url') cmdAuthUrl();
+  else if (cmd === 'auth') await cmdAuth();
   else if (cmd === 'status') await cmdStatus();
   else if (cmd === 'generate') await cmdGenerate(rest);
   else if (cmd === 'placeholders') await cmdPlaceholders(rest);
   else {
-    console.log('Usage: wpcom-images.mjs <auth | status | generate --files <f...> [--concurrency N] | generate --prompt <p> --out <f.png> [--aspect <a>] | placeholders --files <f...>>');
+    console.log('Usage: wpcom-images.mjs <auth-url | auth | status | generate --files <f...> [--concurrency N] | generate --prompt <p> --out <f.png> [--aspect <a>] | placeholders --files <f...>>');
     process.exit(cmd ? 2 : 0);
   }
 } catch (e) {

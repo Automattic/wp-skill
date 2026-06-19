@@ -6,10 +6,8 @@ login**, generated server-side by Google Gemini ("Nano Banana Pro"). The skill s
 openly-licensed images remain an option at any point and need no login.
 
 The endpoint is `POST https://public-api.wordpress.com/wpcom/v2/ai-image/v1/imagine`. It needs a
-logged-in WordPress.com user (no site/blog required). **During launch it is limited to
-Automatticians** — a logged-in non-Automattician gets a `403` and cannot generate yet (see the
-consent flow and failure policy). Per-user quota is 200 images/month for regular users and
-unlimited for Automatticians; usage is charged only on a successful generation.
+logged-in WordPress.com user (no site/blog required). Per-user quota is 200 images/month; usage is
+charged only on a successful generation.
 
 ## Consent comes BEFORE design previews and any markup (this is a design fork)
 
@@ -33,16 +31,12 @@ step. The one thing that suppresses the question is an existing recorded answer.
      generation via the user's WordPress.com login. Resolve the mechanics from
      `wpcom-images.mjs status` (only now, after the user picked this — never run it as a reason to
      skip the question):
-     - **Exit 0** (logged in & allowed): proceed; mention images are generated via their
-       WordPress.com login (usage is never silent). `status` actually exercises access (it probes
-       the endpoint with an empty prompt), so exit 0 means the token is valid *and* this user may
-       generate — not merely that a token file exists.
+     - **Exit 0** (logged in): proceed; mention images are generated via their WordPress.com login
+       (usage is never silent). `status` actually exercises access (it probes the endpoint with an
+       empty prompt), so exit 0 means the token is valid — not merely that a token file exists.
      - **Exit 2** (needs login): offer the one-time login (see "Authenticating" below); frame a
        stale token as "your image login expired — want me to refresh it?". If the user would
        rather not log in, fall back to **Plain placeholders**.
-     - **Exit 4** (authenticated but not authorized — the Automatticians-only launch gate): you
-       can't generate for this account yet. Say so plainly and fall back to **Plain
-       placeholders**, noting real generation can be revisited once the feature opens up.
      - **Exit 3** (unreachable): a network/TLS problem, not auth — say the service is unreachable
        and fall back to **Plain placeholders**.
    - **Plain placeholders** (`"placeholders"`) — the no-login fallback, and what to default to
@@ -79,20 +73,28 @@ markers and the gray placeholder images **stay** so the site renders — see the
 
 This is the same flow the WordPress Studio CLI uses, reusing Studio's WordPress.com OAuth client
 (`client_id=95109`). There is no device-flow polling: the user opens a URL, approves, and pastes
-the token back. **The token must never transit the chat** — so have the **user** run `auth`
-themselves in the session terminal (the `! <command>` prefix runs it locally), not via a tool
-call that would route the pasted token through the transcript:
+the token back. Split it cleanly by what's secret:
 
-```
-! node <skill-dir>/scripts/wpcom-images.mjs auth
-```
+- **The authorize URL is not secret — so print it yourself.** Run `auth-url` (a tool call is fine;
+  it reads no stdin and makes no network call) and put the link straight in chat for the user to
+  click. Don't make the user run a command just to *see* the URL.
 
-`auth` prints a `https://public-api.wordpress.com/oauth2/authorize?...` URL, the user opens it,
-approves, lands on `developer.wordpress.com/copy-oauth-token` which shows the access token, and
-pastes it at the prompt. The script validates the token against `/me` and stores it. Relay the
-printed URL if you ran the command for the user, but **never echo or ask for the token in chat**;
-let the script read it from the user's own stdin. After the user reports success, re-run `status`
-to confirm (exit 0). Never auto-open a browser.
+  ```
+  node <skill-dir>/scripts/wpcom-images.mjs auth-url
+  ```
+
+- **The token IS secret — so the user pastes it locally, never in chat.** After they approve and
+  land on `developer.wordpress.com/copy-oauth-token` (which shows the access token), have the
+  **user** run `auth` themselves in the session terminal (the `! <command>` prefix runs it
+  locally), so the pasted token never routes through the transcript:
+
+  ```
+  ! node <skill-dir>/scripts/wpcom-images.mjs auth
+  ```
+
+`auth` also reprints the authorize URL, then reads the pasted token from the user's own stdin,
+validates it against `/me`, and stores it. **Never echo or ask for the token in chat.** After the
+user reports success, re-run `status` to confirm (exit 0). Never auto-open a browser.
 
 ## Where image markup lives: PHP patterns, never Media Library imports
 
@@ -160,14 +162,14 @@ The endpoint takes `{ prompt, aspect_ratio, output_format }` with headers
 script generates the image (style folded into the prompt), writes `<theme>/assets/<name>.png`,
 and rewrites the alt to the human description. It is **idempotent**: re-running skips finished
 images and replaces only its own placeholders — safe to resume anytime. Expect ~10 s and 1–2 MB
-per image; plan a batch ≤ ~10 images per page, mind the 200/month regular-user quota, and confirm
+per image; plan a batch ≤ ~10 images per page, mind the 200/month quota, and confirm
 with the user before generating dozens. After a batch, verify the images actually render
 (cookie-jar curl of the image URLs or a screenshot).
 
 `generate --files` runs **in batches of 4 concurrent requests** (override with `--concurrency N`;
 `N=1` restores one-at-a-time), so a full page finishes in roughly a quarter of the wall-clock
 time. Markers pointing at the same target file generate once and share the result; per-image
-failures still placeholder-and-continue independently, and a `401`/`403`/`429` stops launching
+failures still placeholder-and-continue independently, and a `401`/`429` stops launching
 new batches (in-flight requests finish) — re-run to resume.
 
 ## Failure policy (the script enforces it — don't fight it)
@@ -180,10 +182,7 @@ new batches (in-flight requests finish) — re-run to resume.
 - **401 / "Authentication required"** = the token no longer works (revoked or expired). The
   script stops the batch and prints the re-auth command. Don't retry; relay the auth flow again.
   (Unfilled markers keep their placeholders, so the site still renders.)
-- **403 (launch gate)** = logged in, but image generation is currently Automatticians-only. The
-  script stops the batch (exit 4). Re-auth won't help — tell the user the feature isn't open to
-  their account yet; placeholders keep the site rendering, and a later run resumes once it opens.
-- **429 (quota exceeded)** = the user hit the monthly limit (200 for regular users). The script
+- **429 (quota exceeded)** = the user hit the monthly limit (200 images/month). The script
   stops the batch and reports that it resets at the start of next month. Never poll-retry.
 - A service outage must never block site creation: the site renders with placeholders, and
   work continues — image generation is an enhancement, not a dependency.
