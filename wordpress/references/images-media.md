@@ -69,32 +69,36 @@ rewriting the alts to human text. So `"placeholders"` is a first-class state, no
 choice. Under any of the other three, if generation later fails (outage, moderation, quota) the
 markers and the gray placeholder images **stay** so the site renders — see the failure policy.
 
-## Authenticating (OAuth2 implicit grant + manual token paste)
+## Authenticating (OAuth2 implicit grant)
 
 This is the same flow the WordPress Studio CLI uses, reusing Studio's WordPress.com OAuth client
-(`client_id=95109`). There is no device-flow polling: the user opens a URL, approves, and pastes
-the token back. Split it cleanly by what's secret:
+(`client_id=95109`). There is no device-flow polling: the user opens a URL, approves, and the
+token is stored. The default flow keeps the agent in the loop end-to-end:
 
-- **The authorize URL is not secret — so print it yourself.** Run `auth-url` (a tool call is fine;
-  it reads no stdin and makes no network call) and put the link straight in chat for the user to
-  click. Don't make the user run a command just to *see* the URL.
+1. **Print the authorize URL yourself.** Run `auth-url` (a tool call is fine; it reads no stdin and
+   makes no network call) and put the link straight in chat for the user to click. Don't make the
+   user run a command just to *see* the URL.
 
-  ```
-  node <skill-dir>/scripts/wpcom-images.mjs auth-url
-  ```
+   ```
+   node <skill-dir>/scripts/wpcom-images.mjs auth-url
+   ```
 
-- **The token IS secret — so the user pastes it locally, never in chat.** After they approve and
-  land on `developer.wordpress.com/copy-oauth-token` (which shows the access token), have the
-  **user** run `auth` themselves in the session terminal (the `! <command>` prefix runs it
-  locally), so the pasted token never routes through the transcript:
+2. **Wait for the user to paste the token, then store it.** They approve, land on
+   `developer.wordpress.com/copy-oauth-token` (which shows the access token), and paste it as their
+   next chat message. Store it with `auth --token`:
 
-  ```
-  ! node <skill-dir>/scripts/wpcom-images.mjs auth
-  ```
+   ```
+   node <skill-dir>/scripts/wpcom-images.mjs auth --token <PASTED_TOKEN>
+   ```
 
-`auth` also reprints the authorize URL, then reads the pasted token from the user's own stdin,
-validates it against `/me`, and stores it. **Never echo or ask for the token in chat.** After the
-user reports success, re-run `status` to confirm (exit 0). Never auto-open a browser.
+   This validates the token against `/me` and stores it. The token is never echoed back, but note
+   this path **does put the token in the chat transcript** — that's the accepted trade-off for not
+   making the user run a command. If a user would rather keep the token out of the chat, they can
+   run `auth` (no `--token`) themselves with the `! ` prefix and paste it into their own stdin
+   instead.
+
+After storing, re-run `status` to confirm (exit 0). Never auto-open a browser. If a token ever
+needs to be invalidated, see "Revocation" below.
 
 ## Where image markup lives: PHP patterns, never Media Library imports
 

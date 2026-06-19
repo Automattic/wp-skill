@@ -6,12 +6,12 @@
  *
  *   auth-url                  print ONLY the authorize URL (no stdin, no network). The agent can
  *                             run this and relay the link in chat — the URL is not secret.
- *   auth                      one-time login (OAuth2 implicit grant + manual token paste, the
- *                             same flow the WordPress Studio CLI uses). Prints the authorize URL
- *                             the USER opens in their browser; after approving, WordPress.com
- *                             shows the token on a copy page; the user pastes it back. Read from
- *                             stdin, so the USER should run this themselves (e.g. `! node … auth`)
- *                             — the token never transits the chat. The token is NOT echoed.
+ *   auth [--token <t>]        one-time login (OAuth2 implicit grant, the same flow the WordPress
+ *                             Studio CLI uses). With `--token` it validates and stores the given
+ *                             token non-interactively (the agent can run this with a token the
+ *                             user pasted into the chat). Without it, prints the authorize URL and
+ *                             reads the pasted token from stdin, so the USER can run it themselves
+ *                             (`! node … auth`) and keep the token out of the chat. NOT echoed.
  *   status                    who is logged in + a live check of whether this token can actually
  *                             generate.
  *   generate --files <f...> [--concurrency N]   scan theme files for AI_IMAGE alt markers,
@@ -266,14 +266,26 @@ function cmdAuthUrl() {
   console.log(authorizeUrl());
 }
 
-async function cmdAuth() {
-  console.log('Open this URL in your browser to authorize (login is your WordPress.com account):');
-  console.log(`\n  ${authorizeUrl()}\n`);
-  console.log('After you approve, WordPress.com shows your access token on the next page.');
-  console.log('Copy that token and paste it here, then press Enter.\n');
-  process.stdout.write('Authentication token: ');
+async function cmdAuth(args = []) {
+  // Two ways in:
+  //  - `auth --token <t>`  : non-interactive. The token is supplied directly (e.g. the agent
+  //                          storing a token the user pasted into the chat). No stdin, no prompt.
+  //  - `auth`              : interactive. Print the URL and read the pasted token from the user's
+  //                          own stdin, so the token never has to transit the chat.
+  const ti = args.indexOf('--token');
+  const flagToken = ti !== -1 ? args[ti + 1] : undefined;
 
-  const token = (await readStdinLine()).trim();
+  let token;
+  if (flagToken !== undefined) {
+    token = String(flagToken).trim();
+  } else {
+    console.log('Open this URL in your browser to authorize (login is your WordPress.com account):');
+    console.log(`\n  ${authorizeUrl()}\n`);
+    console.log('After you approve, WordPress.com shows your access token on the next page.');
+    console.log('Copy that token and paste it here, then press Enter.\n');
+    process.stdout.write('Authentication token: ');
+    token = (await readStdinLine()).trim();
+  }
   if (!token) {
     console.error('\nNo token provided — re-run auth when ready.');
     process.exit(2);
@@ -577,12 +589,12 @@ function reportHardFailure(res) {
 const [, , cmd, ...rest] = process.argv;
 try {
   if (cmd === 'auth-url') cmdAuthUrl();
-  else if (cmd === 'auth') await cmdAuth();
+  else if (cmd === 'auth') await cmdAuth(rest);
   else if (cmd === 'status') await cmdStatus();
   else if (cmd === 'generate') await cmdGenerate(rest);
   else if (cmd === 'placeholders') await cmdPlaceholders(rest);
   else {
-    console.log('Usage: wpcom-images.mjs <auth-url | auth | status | generate --files <f...> [--concurrency N] | generate --prompt <p> --out <f.png> [--aspect <a>] | placeholders --files <f...>>');
+    console.log('Usage: wpcom-images.mjs <auth-url | auth [--token <t>] | status | generate --files <f...> [--concurrency N] | generate --prompt <p> --out <f.png> [--aspect <a>] | placeholders --files <f...>>');
     process.exit(cmd ? 2 : 0);
   }
 } catch (e) {

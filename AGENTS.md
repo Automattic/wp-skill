@@ -25,7 +25,9 @@ is only the non-obvious stuff about *developing* the skill.
 - **Project layout the skill assumes:** deliverables (theme/plugin) live at the **project root**;
   everything the agent generates is scratch under a gitignored **`workdir/`** (`workdir/.playground`
   run-state, `workdir/previews`, `workdir/media` staging). `playground.sh bootstrap` writes
-  `workdir/.gitignore` (`*`).
+  `workdir/.gitignore` (`*`). The one committed *generated* artifact is **`site/db.sql`** — the
+  versioned site database (`db.sh snapshot`/`restore`); it is the site's data source of truth, so
+  it lives at the root and is committed, unlike the disposable binary DB in `workdir/`.
 - **Block markup is "done" only after both gates pass** (`validate-blocks.cjs` static +
   `editor-gate.mjs` live) — invalid blocks render fine on the frontend and only break in the editor.
 - **Verify against reality before claiming done.** This skill is built by actually running things
@@ -34,11 +36,13 @@ is only the non-obvious stuff about *developing* the skill.
 ## Image generation (current active area)
 
 - `scripts/wpcom-images.mjs` → WordPress.com `wpcom/v2/ai-image/v1/imagine` (Gemini, server-side).
-  Auth is **OAuth2 implicit-grant + manual token paste**, reusing WordPress Studio's
-  `client_id=95109`. Split by what's secret: the **agent prints the authorize URL itself** (via
-  `auth-url` — the URL isn't secret), but the **user runs `auth` themselves** to paste the token
-  so it never transits the chat. See `references/images-media.md` for the consent flow (4 options,
-  "Generate AI" shown first, plain placeholders as the no-login fallback) and failure policy.
+  Auth is **OAuth2 implicit-grant**, reusing WordPress Studio's `client_id=95109`. Default flow
+  keeps the agent in the loop: the **agent prints the authorize URL** (`auth-url`), the user pastes
+  the token in chat, and the agent stores it (`auth --token <t>`). This deliberately puts the token
+  in the transcript — the accepted trade-off for not making the user run a command; a user who
+  wants the token kept out of chat runs bare `auth` themselves and pastes into their own stdin. See
+  `references/images-media.md` for the consent flow (4 options, "Generate AI" shown first, plain
+  placeholders as the no-login fallback) and failure policy.
 - **The endpoint is GA — open to all WordPress.com users at 200 images/month.** No Automatticians
   gate anymore; don't reintroduce one (no `forbidden`/exit-4/403-launch-gate paths). The skill
   must still keep working (placeholders) for users who can't or won't log in.
