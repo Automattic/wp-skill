@@ -126,6 +126,71 @@ classes are deprecated forms):
 <!-- /wp:image -->
 ```
 
+**Social links** — a `<ul>` root; child `core/social-link` blocks are **self-closing**
+(`/-->`, no inner HTML). `"iconColor":"x"` (a preset) emits both `"iconColorValue"` and a
+`has-icon-color` class; `"size"` is a full class string (`has-normal-icon-size`); a style
+variation like `is-style-logos-only` is a `className`. Class order on the `<ul>` is
+size → color → variation:
+
+```html
+<!-- wp:social-links {"iconColor":"vivid-cyan-blue","iconColorValue":"#0693e3","size":"has-normal-icon-size","className":"is-style-logos-only","layout":{"type":"flex","justifyContent":"center"}} -->
+<ul class="wp-block-social-links has-normal-icon-size has-icon-color is-style-logos-only"><!-- wp:social-link {"url":"https://instagram.com/example","service":"instagram"} /-->
+<!-- wp:social-link {"url":"https://x.com/example","service":"x"} /--></ul>
+<!-- /wp:social-links -->
+```
+
+**Columns** — `core/columns` wraps `core/column` children. A column's `"width"` becomes an
+inline `style="flex-basis:…"` (a style, not a class); the wrapper carries only
+`wp-block-columns` (+ `alignwide`/`alignfull` from `align`). Omit `width` on every column for
+equal widths.
+
+```html
+<!-- wp:columns {"align":"wide"} -->
+<div class="wp-block-columns alignwide"><!-- wp:column {"width":"66.66%"} -->
+<div class="wp-block-column" style="flex-basis:66.66%"><!-- wp:paragraph -->
+<p>Left</p>
+<!-- /wp:paragraph --></div>
+<!-- /wp:column -->
+<!-- wp:column {"width":"33.33%"} -->
+<div class="wp-block-column" style="flex-basis:33.33%"><!-- wp:paragraph -->
+<p>Right</p>
+<!-- /wp:paragraph --></div>
+<!-- /wp:column --></div>
+<!-- /wp:columns -->
+```
+
+**Query loop** — `core/query` holds a `core/post-template` whose self-closing children render
+once per post; pagination lives in a sibling `core/query-pagination`. The `<div>` wrappers exist
+only on `query` and `query-pagination` — `post-template` and every `post-*` child are
+comment-only (no HTML between delimiters). Give each query loop a unique `queryId`.
+
+```html
+<!-- wp:query {"queryId":1,"query":{"perPage":6,"postType":"post","order":"desc","orderBy":"date"},"align":"wide"} -->
+<div class="wp-block-query alignwide"><!-- wp:post-template {"layout":{"type":"grid","columnCount":3}} -->
+<!-- wp:post-featured-image {"isLink":true,"aspectRatio":"3/2"} /-->
+<!-- wp:post-title {"isLink":true} /-->
+<!-- wp:post-excerpt /-->
+<!-- /wp:post-template -->
+<!-- wp:query-pagination -->
+<!-- wp:query-pagination-previous /-->
+<!-- wp:query-pagination-numbers /-->
+<!-- wp:query-pagination-next /-->
+<!-- /wp:query-pagination --></div>
+<!-- /wp:query -->
+```
+
+**Navigation** — `core/navigation` is server-rendered: in markup it is **comment-only, with no
+wrapper element** (the `<nav>`/`<ul>` are generated at render time). Its children are self-closing
+`core/navigation-link` blocks (or a single `core/page-list /` to auto-list pages). Writing a
+`<nav>…</nav>` between the delimiters is the usual cause of an INVALID navigation.
+
+```html
+<!-- wp:navigation {"layout":{"type":"flex","justifyContent":"right"}} -->
+<!-- wp:navigation-link {"label":"Work","url":"/work","kind":"custom"} /-->
+<!-- wp:navigation-link {"label":"About","url":"/about","kind":"custom"} /-->
+<!-- /wp:navigation -->
+```
+
 **Never** put raw `<style>` tags in templates, parts, or patterns (lint failure; styles
 belong in theme.json or style.css). **Never** use `<inner-blocks>` placeholders — write the
 full expanded markup. Don't paste block examples from other codebases or old docs
