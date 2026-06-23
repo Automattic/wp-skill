@@ -6,6 +6,12 @@ Before building a new site/theme (or materially redesigning one), run this workf
 entirely for small edits, or if the user says to skip — then proceed with your single best
 direction and say which you chose.
 
+**If the user pointed at a reference website** (inspiration, "build a site for X.com", "rebuild
+my site at…", "unlike Y.com"), capture it and write its brief first — `references/inspiration.md`.
+The reference's palette, layout archetype, and section rhythm feed both the directions below and
+the page composition, and make the brief "specific" (so honor it across all 4 directions rather
+than diverging wildly).
+
 **First, resolve image handling** (`references/images-media.md`): ask the user — always, even
 when already logged in — how to handle imagery, presenting the four options (generate AI photos
 first, then plain placeholders, provide their own, or imageless). The answer changes what the
@@ -121,6 +127,22 @@ spacing, chrome, and hero composition. They persist in `workdir/previews/` (no n
 them before a temp dir vanishes), so just note which option won — keep the whole gallery around
 for reference. The finished theme's first fold must be recognizably descended from the selected
 preview; the rest of the site extends its visual language.
+
+**Then write the site spec before touching theme files.** Derive
+`workdir/.playground/site-spec.json` from the chosen direction + the brief —
+`references/site-spec.md`. It pins the page-frame shape (`layoutMode`), header behavior, content
+mode, the cinematic `heroComposition`, and typography. theme.json, style.css, the header part,
+and every page branch on it; deciding these once, up front, is what stops the build from
+defaulting to a generic vertical stack with a guessed header. (On the skip path — user declined
+the gallery — still write the spec from the single direction you chose.)
+
+**Commit to the aesthetic and plan the page compositions** — `references/aesthetics.md`. Sketch
+one line per planned page (section count + archetypes) before building; give the homepage the
+richest treatment and make every page have at least one section the others don't.
+
+**Add motion once the theme renders.** A static theme reads as AI slop — apply the restrained
+scroll catalog in `references/motion.md` (section reveal is always-on; pick 1–2 richer effects
+for the homepage within the budget).
 
 ## Verify and polish from evidence, not pixels
 

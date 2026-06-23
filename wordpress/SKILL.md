@@ -22,6 +22,11 @@ Run `scripts/playground.sh` from the project directory (its state lives in `./wo
 | Write or edit ANY block markup (templates, parts, patterns, post content) | `references/block-markup.md` |
 | Build a theme: structure, theme.json, fonts, patterns, navigation, query loops | `references/themes-and-patterns.md` |
 | New site / redesign (browser design previews + selection); polish rendered output | `references/design.md` |
+| User points at a reference website (inspiration, "build for", rebuild, "unlike X") | `references/inspiration.md` |
+| Decide the site's page-frame shape + header behavior before building (site spec) | `references/site-spec.md` |
+| Build the page-frame CSS for a non-default layoutMode (sidebar, landing, magazine, gallery) | `references/layout-modes.md` |
+| Make a theme look designed, not generated: aesthetic direction + per-page composition | `references/aesthetics.md` |
+| Add tasteful scroll motion to a built theme (reveal, hero-fade, sticky header) | `references/motion.md` |
 | Images for a site: generate (AI via the user's WordPress.com login), add, or remove | `references/images-media.md` |
 | Anything destructive on a site the user calls production | `references/backups-and-safety.md` |
 

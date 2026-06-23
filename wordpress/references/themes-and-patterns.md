@@ -22,6 +22,11 @@ anything distributable.
 
 ## theme.json (version 3)
 
+theme.json is the single source of truth every other file reads. A theme looks "AI-generated"
+mostly because of token sloppiness that surfaces here: unreadable contrast, children touching
+in flex/grid containers, buttons inheriting invisible text. Get these right at token-design
+time — there is no recovery downstream.
+
 - `"version": 3`, `"$schema": "https://schemas.wp.org/trunk/theme.json"`.
 - `settings.appearanceTools: true` enables border/spacing/typography/color controls in one
   line.
@@ -30,8 +35,57 @@ anything distributable.
   `spacing.spacingSizes`, `layout.contentSize` / `wideSize`.
 - Set defaults in `styles`: global typography/color, `styles.spacing.blockGap`, and
   `styles.elements` (`heading`, `link`, `button`) before reaching for CSS.
-- `contentSize` 800–900px reads better than the ~640px default for most sites; reserve
-  narrow widths for long-form text. `wideSize` 1200–1400px.
+
+### Color contrast (WCAG AA — a hard rule, not a nicety)
+Downstream files reference your slugs by name and trust them to be readable. Verify every
+pairing at palette-design time:
+
+- **Body text vs page background** ≥ 4.5:1 (aim 7:1 where the design allows).
+- **Button label vs button surface** ≥ 4.5:1 — check *both* directions (light-on-light and
+  dark-on-dark are the common failures).
+- **Muted/secondary text** ≥ 4.5:1 against *every* surface it renders on (page bg AND card/panel).
+- **Saturated accents are usually not readable as body text** — reserve them for borders,
+  icons, button surfaces, large display headings.
+- **No near-matches:** two slugs under ~25 lightness steps apart fail on normal-weight text.
+  Saturated mid-tones (mid-green/blue/orange) look fine as a swatch and routinely fail as a
+  text or button background — push toward higher contrast when in doubt.
+
+### Layout & alignment (wires WordPress's full-bleed behavior)
+- `contentSize` 800–960px reads better than the ~640px default; reserve narrow widths for
+  long-form text. `wideSize` 1200–1400px.
+- **`settings.useRootPaddingAwareAlignments: true`** — without it, `align:wide`/`align:full`
+  sections inherit body padding and never reach the viewport edge (the classic "full-bleed hero
+  renders with gutters" bug — see the layout cascade in `block-markup.md`).
+- **`styles.spacing.padding`**: set only horizontal (`left`/`right`) to a fluid value —
+  `"clamp(1.5rem, 5vw, 4rem)"` — and `top`/`bottom` to `"0"`. A fixed token gives a cramped
+  gutter on desktop and overflows on mobile. Vertical rhythm lives on sections, not the body.
+- Once root padding is set, every edge-to-edge section MUST declare `"align":"full"`; content-
+  width sections use `"align":"wide"`. A section with no `align` renders at the narrow column.
+
+### Gap defaults (flex/grid containers don't space children — set these or they touch)
+WordPress's flex (`navigation`, `buttons`) and grid (`post-template`) layouts apply **zero gap**
+by default. Without theme-level defaults, nav items butt together, buttons touch, and bordered
+cards collapse their borders into one stripe. All REQUIRED:
+
+- `styles.spacing.blockGap` — the site-wide vertical rhythm between sibling blocks in any
+  default-layout container (prose, post bodies). The single most-leveraged prose-rhythm setting.
+- `styles.blocks.core/navigation.spacing.blockGap` (e.g. `var:preset|spacing|30`).
+- `styles.blocks.core/buttons.spacing.blockGap` (e.g. `var:preset|spacing|30`).
+- `styles.blocks.core/post-template.spacing.blockGap` (e.g. `var:preset|spacing|40`–`50`).
+- `styles.blocks.core/columns.spacing.blockGap` — recommended for asymmetric two-column layouts.
+
+### Block defaults (paired-contrast rule)
+Blocks that don't override colors fall through to body defaults that may be invisible on tinted
+surfaces. For **every** `styles.blocks.<block>.color` and `styles.elements.<el>.color`, set
+`background` AND `text` **together** — never one alone — and do the same for `:hover`. Required
+pairs: `core/button` (default + `:hover`), `elements.link` (default + `:hover`). A button or
+link whose `:hover` pair equals its default pair has an invisible hover state.
+
+### Typography scale
+Keep sizes grounded: body 1rem; headings scale modestly (h1 ≤ 2.5–3rem); use `clamp()` for
+display text but cap ~3.5rem — sizes above 4rem rarely improve a design. Line-height: body
+1.5–1.65, headings 1.1–1.3, never below 1.0. Avoid Inter/Roboto/Arial/Open Sans/system fonts;
+pair a distinctive display font with a refined body font.
 
 ## Fonts
 
