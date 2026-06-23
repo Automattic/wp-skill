@@ -3,18 +3,19 @@ import { readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 
 // Browser discovery, in order: Playwright's bundled/cached Chromium, then system Chrome, then a
-// system Chromium channel. Don't run `npx playwright install` first — it errors on some newer OSes
+// system Chromium channel, then chrome-headless-shell (Playwright's cached headless shell — what a
+// prior `playwright install` often leaves behind). Don't run `npx playwright install` first — it errors on some newer OSes
 // (e.g. Ubuntu 26.04) and a bundled/cached build is usually already present. On total failure, say
 // exactly what was tried so a failed *install* is never mistaken for a failed *gate*.
 async function launchBrowser() {
   try { return await chromium.launch(); }
   catch (bundled) {
-    for (const channel of ['chrome', 'chromium']) {
+    for (const channel of ['chrome', 'chromium', 'chrome-headless-shell']) {
       try { return await chromium.launch({ channel }); } catch {}
     }
     throw new Error(
       'Could not launch a browser for the editor gate. Tried Playwright\'s bundled/cached Chromium ('
-      + String(bundled.message || bundled).split('\n')[0] + ') and system channels chrome/chromium. '
+      + String(bundled.message || bundled).split('\n')[0] + ') and system channels chrome/chromium/chrome-headless-shell. '
       + 'Install Google Chrome (or `npx playwright install chromium`, which is unsupported on some '
       + 'OSes such as Ubuntu 26.04 — prefer system Chrome there). A failed browser install is not a '
       + 'failed gate: if a bundled/cached Chromium already exists, this should not be reached.'
