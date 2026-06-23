@@ -142,7 +142,10 @@ theme stays self-contained: files in `assets/`, URLs resolved at render time.
 
 ## The marker contract
 
-A marker is the `alt` of an `<img>`, with the target filename in the same tag's `src`:
+A marker is the `alt` of an `<img>`, with the target filename in the same tag's `src` — and the
+`src` must be exactly **`assets/<name>.png`, flat, no subdirectory** (not `assets/images/<name>.png`);
+the generator writes flat into `<theme>/assets/`, so a subdirectory path matches nothing and the
+whole batch is rejected:
 
 ```
 alt="AI_IMAGE: <description> | <style> | <aspect>"
