@@ -19,7 +19,9 @@ node scripts/checker/validate-blocks.cjs <files...>
 - `LINT` — fix it (`core/missing`, `core/freeform`, raw `<style>` tags, unknown block types).
 - `NORMALIZE` — **warning only.** The markup parses valid but is a deprecated form. Do NOT
   "fix" it by hand-editing the HTML; if you want canonical markup, regenerate the block from
-  its attributes. Never treat a NORMALIZE warning as a failure.
+  its attributes — or run `validate-blocks.cjs --fix <files>` to rewrite NORMALIZE-only files to
+  `serialize(parse())` automatically (it never touches INVALID/LINT files). Never treat a
+  NORMALIZE warning as a failure.
 
 The inner loop validates against pinned core packages only — plugin blocks, PHP patterns,
 and the site's actual WP version are invisible to it.

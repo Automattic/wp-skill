@@ -136,6 +136,14 @@ and owns spacing). Diagnose from the rendered DOM, then fix in one batch:
    node <skill-dir>/scripts/checker/shot.mjs "$URL" desktop.png 1280 900
    node <skill-dir>/scripts/checker/shot.mjs "$URL" mobile.png  390  844
    ```
+   For a multi-page site, capture **every page across both viewports in one call** with
+   `visual-gate.mjs` — it also fails loudly on any blank or 404 route, which a desktop-only,
+   home-page-only pass silently misses:
+   ```bash
+   node <skill-dir>/scripts/checker/visual-gate.mjs "$URL" --paths /,/journal/,/about/ --viewports desktop,mobile
+   ```
+   It writes `visual-<page>-<viewport>.png` for each page and exits non-zero if any page 404s or
+   renders blank. Always do the mobile pass, not just desktop.
 2. **Diagnose every section before fixing anything.** For each issue the screenshots show,
    inspect the live DOM and computed styles (Playwright `page.evaluate` with
    `getComputedStyle`, bounding boxes vs viewport width) to find the actual cause — the
