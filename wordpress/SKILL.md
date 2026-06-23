@@ -58,7 +58,13 @@ Run `scripts/playground.sh` from the project directory (its state lives in `./wo
 7. **For new sites/redesigns, users choose from rendered HTML previews in a browser**
    (`references/design.md`) — never from text directions, terminal option lists, or ASCII
    mockups.
-8. **Image handling needs an explicit choice — always ask, before design previews and any
+8. **A new theme isn't built until the five-step build sequence runs** (`references/design.md`
+   §5): site spec (`site-spec.md`) → theme.json rigor (`themes-and-patterns.md`) → page-frame
+   CSS for the layoutMode (`layout-modes.md`) → page composition (`aesthetics.md`) → scroll
+   motion (`motion.md`). Read each reference when you reach its step. A theme that renders pages
+   but skips the site spec or ships zero motion is an incomplete build, not a done one — these
+   are exactly the steps that separate a designed site from generic AI output.
+9. **Image handling needs an explicit choice — always ask, before design previews and any
    markup. Being logged in is not consent.** Check `workdir/.playground/images.json` first (a recorded
    answer is the only thing that skips the question), then follow `references/images-media.md`:
    present four options, **"generate real AI photos" always listed first**, then plain

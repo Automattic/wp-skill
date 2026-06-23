@@ -128,21 +128,33 @@ them before a temp dir vanishes), so just note which option won — keep the who
 for reference. The finished theme's first fold must be recognizably descended from the selected
 preview; the rest of the site extends its visual language.
 
-**Then write the site spec before touching theme files.** Derive
-`workdir/.playground/site-spec.json` from the chosen direction + the brief —
-`references/site-spec.md`. It pins the page-frame shape (`layoutMode`), header behavior, content
-mode, the cinematic `heroComposition`, and typography. theme.json, style.css, the header part,
-and every page branch on it; deciding these once, up front, is what stops the build from
-defaulting to a generic vertical stack with a guessed header. (On the skip path — user declined
-the gallery — still write the spec from the single direction you chose.)
+### 5. Build the theme in this order — every step is required, not optional
 
-**Commit to the aesthetic and plan the page compositions** — `references/aesthetics.md`. Sketch
-one line per planned page (section count + archetypes) before building; give the homepage the
-richest treatment and make every page have at least one section the others don't.
+A theme built straight from the preview without these steps reads as generic AI output. Do **all
+five**, in order, before handing back. Skipping any of them is an incomplete build, not a
+shortcut — the motion pass in particular is what separates a live-feeling site from AI slop, and
+it is the most common omission. Read each named reference when you reach its step.
 
-**Add motion once the theme renders.** A static theme reads as AI slop — apply the restrained
-scroll catalog in `references/motion.md` (section reveal is always-on; pick 1–2 richer effects
-for the homepage within the budget).
+1. **Write the site spec** — `references/site-spec.md`. Derive `workdir/.playground/site-spec.json`
+   from the chosen direction + brief: `layoutMode`, `headerBehavior`, `contentMode`, the cinematic
+   `heroComposition`, typography. Every later file branches on it; deciding it once up front is
+   what stops the build from defaulting to a generic vertical stack with a guessed header.
+2. **theme.json with the rigor rules** — `references/themes-and-patterns.md`: WCAG-AA contrast,
+   `useRootPaddingAwareAlignments: true`, the required flex/grid `blockGap` defaults
+   (navigation, buttons, post-template), and paired background+text on every block/element color.
+3. **Page-frame CSS for the layoutMode** — if `layoutMode` is anything other than
+   `vertical-stack`, follow `references/layout-modes.md` for the sidebar/landing/magazine/gallery
+   shell and the sticky/overlay header contract.
+4. **Compose the pages** — `references/aesthetics.md`: commit to the aesthetic, plan one line per
+   page (section count + archetypes), give the homepage the richest treatment (≥3 unique
+   sections), and ensure every page has at least one section the others don't.
+5. **Add motion before hand-back** — `references/motion.md`. Copy `assets/motion/{motion.css,
+   motion.js}` into the theme, enqueue them frontend-only, and add the class hooks: section
+   reveal is always-on; pick 1–2 richer homepage effects within the budget. A static theme is an
+   unfinished theme.
+
+(On the skip path — user declined the gallery — still run all five steps from the single
+direction you chose.)
 
 ## Verify and polish from evidence, not pixels
 
