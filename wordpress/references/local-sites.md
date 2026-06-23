@@ -78,6 +78,16 @@ echo "Test it: http://127.0.0.1:$(cat workdir/.playground/server.port)/<path-or-
   keeps them — the recorded set is whatever the last call specified.
 - The Playground blueprint `wp-cli` step swallows stdout (exit 0, no output). Use the `wp`
   verb instead.
+- **Set the static front page with `wp eval`, not `wp option update`.** On Playground,
+  `wp option update show_on_front|page_on_front|page_for_posts` can report
+  `Value … is unchanged` and silently no-op, so a front-page/posts-page theme never routes.
+  Set the options through `update_option` and flush rewrites, using the real page IDs:
+  ```bash
+  playground.sh wp -- eval 'update_option("show_on_front","page"); update_option("page_on_front", FRONT_ID); update_option("page_for_posts", POSTS_ID);'
+  playground.sh wp -- rewrite flush --hard
+  # verify (NOT the DB siteurl):
+  playground.sh wp -- eval 'echo get_option("show_on_front")," front=",get_option("page_on_front")," posts=",get_option("page_for_posts");'
+  ```
 
 ## Requirements and per-agent facts
 
