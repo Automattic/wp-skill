@@ -52,7 +52,11 @@ Run `scripts/playground.sh` from the project directory (its state lives in `./wo
    hardcode or assume one.
 7. **For new sites/redesigns, users choose from rendered HTML previews in a browser**
    (`references/design.md`) — never from text directions, terminal option lists, or ASCII
-   mockups.
+   mockups. The number of previews scales to the brief: an open brief or material redesign gets
+   the 4-direction gallery; a tightly-specified brief gets a **single** first-fold preview built
+   to that brief (still shown and approved in the browser — not silently skipped). Build what the
+   user asked for; previews confirm the execution, they don't reopen a decision the brief already
+   made.
 8. **Image handling needs an explicit choice — always ask, before design previews and any
    markup. Being logged in is not consent.** Check `workdir/.playground/images.json` first (a recorded
    answer is the only thing that skips the question), then follow `references/images-media.md`:
