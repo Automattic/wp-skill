@@ -2,17 +2,24 @@ import { chromium } from 'playwright';
 
 // Full-page screenshot at a given viewport width.
 //   node shot.mjs <url> <out.png> [width=1280] [height=900]
-// Prefers Playwright's bundled Chromium; falls back to the system-installed Chrome when the
-// bundled browser isn't installed (e.g. `npx playwright install` was blocked by a sandboxed
-// network) — the same fallback the editor gate uses.
+// Browser discovery: bundled/cached Chromium, then system Chrome, then a Chromium channel — the
+// same fallback the editor gate uses. Don't pre-run `npx playwright install` (unsupported on some
+// newer OSes, e.g. Ubuntu 26.04, and usually unnecessary).
 const [, , url, out, w = '1280', h = '900'] = process.argv;
 if (!url || !out) { console.error('Usage: shot.mjs <url> <out.png> [width] [height]'); process.exit(2); }
 
 async function launchBrowser() {
   try { return await chromium.launch(); }
-  catch (e) {
-    if (/Executable doesn't exist|playwright install/i.test(String(e))) return await chromium.launch({ channel: 'chrome' });
-    throw e;
+  catch (bundled) {
+    for (const channel of ['chrome', 'chromium']) {
+      try { return await chromium.launch({ channel }); } catch {}
+    }
+    throw new Error(
+      'Could not launch a browser for the screenshot. Tried Playwright\'s bundled/cached Chromium ('
+      + String(bundled.message || bundled).split('\n')[0] + ') and system channels chrome/chromium. '
+      + 'Install Google Chrome (or `npx playwright install chromium`, unsupported on some OSes such '
+      + 'as Ubuntu 26.04 — prefer system Chrome there).'
+    );
   }
 }
 

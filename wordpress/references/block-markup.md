@@ -30,9 +30,12 @@ and the site's actual WP version are invisible to it.
 node scripts/checker/editor-gate.mjs <site-url> <theme-dir>
 ```
 
-This opens the live site's editor (Playwright; run `npx playwright install chromium` once in
-`scripts/checker/`, or — when that download is blocked — it falls back to your system-installed
-Chrome) and validates every template, part, and **server-rendered pattern**
+This opens the live site's editor (Playwright). **Just run it** — it auto-uses Playwright's
+bundled/cached Chromium, then falls back to your system-installed Chrome. Don't pre-run
+`npx playwright install chromium`: that download is unsupported on some newer OSes (e.g. Ubuntu
+26.04) and the gate doesn't need it — a bundled/cached build is usually already present, and a
+failed *install* is not a failed *gate*. Only install a browser if the gate itself reports it
+tried both and found none. It validates every template, part, and **server-rendered pattern**
 against the site's full block registry. It must print `GATE PASS`. Then check rendered
 layout with a screenshot (see `design.md`) — the gate catches invalid blocks, not a hero
 rendering with gutters.
