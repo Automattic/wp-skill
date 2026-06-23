@@ -88,6 +88,14 @@ echo "Test it: http://127.0.0.1:$(cat workdir/.playground/server.port)/<path-or-
   # verify (NOT the DB siteurl):
   playground.sh wp -- eval 'echo get_option("show_on_front")," front=",get_option("page_on_front")," posts=",get_option("page_for_posts");'
   ```
+- **The `wp` verb drops a lone numeric positional argument.** `playground.sh wp -- post delete 1`
+  or `… post meta update 5 _wp_page_template page-full` reaches wp-cli as ID **0** (the Playground
+  CLI layer swallows a bare number), so the command silently targets nothing — e.g. "Could not find
+  post with ID 0". For anything keyed by a numeric post ID, use `wp eval` instead:
+  ```bash
+  playground.sh wp -- eval 'wp_trash_post(1);'                                      # not: wp post delete 1
+  playground.sh wp -- eval 'update_post_meta(5, "_wp_page_template", "page-full");' # not: wp post meta update 5 …
+  ```
 
 ## Requirements and per-agent facts
 
