@@ -33,7 +33,7 @@ everything the agent generates as working state goes under `workdir/`, which `bo
 gitignored (`workdir/.gitignore` = `*`). Mount the theme from the root, e.g.
 `./my-theme:/wordpress/wp-content/themes/my-theme`.
 
-## The four verbs
+## The verbs
 
 | Verb | When to call it |
 |---|---|
@@ -41,6 +41,7 @@ gitignored (`workdir/.gitignore` = `*`). Mount the theme from the root, e.g.
 | `playground.sh ensure [host:vfs ...]` | Whenever you need the server running. Convergent and safe to re-run blindly: reuses a healthy server, restarts if the mount set changed, starts fresh otherwise. Pass each directory the site must see (e.g. a theme you are writing) as `./my-theme:/wordpress/wp-content/themes/my-theme`. |
 | `playground.sh wp -- <wp-cli args>` | Any wp-cli command. There is no local `wp` binary and no other working wp-cli path on Playground; this verb runs the pinned phar against the same site and the **same mount set** as the server. |
 | `playground.sh front-page <home-id> [posts-id]` | Set a static front page (and optional posts page) so routing actually sticks. Wraps the `wp eval` recipe below — use it instead of `wp option update`. |
+| `playground.sh status` | Fast snapshot from recorded state (no wp/npx spawn): bootstrapped? server running + port? recorded mounts? + the relaunch command. Run it at the start of a session instead of guessing or improvising a tracker. |
 | `playground.sh stop` | Only when the user asks to shut down, or when you must restart to change mounts — **not** as a reflex when a build is "done" (the user needs the site live to test). Stops the server by process group and **asserts** nothing survives — treat a failed assertion as a real bug, not noise. |
 
 Typical session:
