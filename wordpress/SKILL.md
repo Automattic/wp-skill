@@ -28,8 +28,8 @@ Run `scripts/playground.sh` from the project directory (its state lives in `./wo
 ## Non-negotiable rules
 
 1. **Local WordPress = Playground via `scripts/playground.sh`** (verbs:
-   `bootstrap | ensure | wp | stop`). Docker is banned. Never hand-roll a MySQL/PHP stack,
-   never wp-now.
+   `bootstrap | ensure | wp | front-page | stop`). Docker is banned. Never hand-roll a MySQL/PHP
+   stack, never wp-now.
 2. **Local sites you created are disposable; production is not.** Before any destructive
    write to a user-designated production site, create and verify a backup manifest
    (`references/backups-and-safety.md`). If the user says to skip it, refuse — creating one
