@@ -40,6 +40,8 @@ Requirements: Node 18+ and a POSIX shell (macOS/Linux/WSL).
 
 To test changes, symlink the `wordpress/` directory into the skills folder of a test project, then start your agent in that project and give it WordPress tasks (e.g. "create a local WordPress site with a custom block theme").
 
+> **Clone to a persistent location, not `/tmp`.** The agent runs the skill's scripts (`playground.sh ensure`, the two gates, `wpcom-images.mjs`) throughout a build *and* in later sessions to relaunch the site. If the clone (and the symlink target) live in `/tmp`, they get wiped between sessions — and a later "restart my site" then fails with `playground.sh: No such file or directory` even though the Playground **data** survives (only the scripts are gone). Clone into your home or project tree (e.g. `~/src/wp-skill`) and symlink from there.
+
 ### Claude Code
 
 ```bash
