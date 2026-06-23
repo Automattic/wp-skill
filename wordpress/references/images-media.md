@@ -175,6 +175,23 @@ alt="AI_IMAGE: <description> | <style> | <aspect>"
 - **Grid/row consistency**: images displayed together in a row or grid (cards, team
   members, gallery items) MUST share one aspect — never mix.
 
+## Pre-flight: `check` the markers before the gates (no auth, no network)
+
+Marker mistakes — a subdirectory or mis-cased/`.jpg` `src`, a `core/cover` whose `<img alt>` has
+no matching block-comment `"alt"` (the desync above), mixed aspects in one grid/row, or two
+markers pointing at one filename with different prompts — otherwise surface only mid-`generate`,
+after you've already passed both block gates. Catch them up front with a static pre-flight that
+makes **zero** network calls and needs no login:
+
+```bash
+node <skill-dir>/scripts/wpcom-images.mjs check --files <theme>/patterns/*.php <theme>/templates/*.html
+```
+
+It exits non-zero and itemizes every issue (each line is the file, the marker, and the fix). Run
+it as a cheap step right before the block gates — fixing a marker before gate 1 is faster than
+discovering it when `generate` rejects the batch. `check` validates authoring only; it never
+generates, so it's safe to run anytime, logged in or not.
+
 ## Filling the slots: after the editor gate, before "done"
 
 Both filling commands run once the theme passes both block gates (the markers don't affect
