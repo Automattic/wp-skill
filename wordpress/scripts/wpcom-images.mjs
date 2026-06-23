@@ -556,8 +556,15 @@ function scanMarkers(files) {
 
 function rewriteAlt(file, marker, humanAlt) {
   const text = fs.readFileSync(file, 'utf8');
-  const escaped = humanAlt.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
-  fs.writeFileSync(file, text.split(`alt="${marker}"`).join(`alt="${escaped}"`));
+  // The marker can appear TWICE: as the <img alt="…"> (HTML-escaped) and — for core/cover and
+  // core/image — as the block-comment "alt":"…" attribute (JSON-escaped). Rewrite BOTH with the
+  // right escaping; rewriting only the <img> desyncs the two and the block fails the editor gate
+  // after generation.
+  const htmlEscaped = humanAlt.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  const jsonEscaped = humanAlt.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  let out = text.split(`alt="${marker}"`).join(`alt="${htmlEscaped}"`);   // <img alt="…">
+  out = out.split(`"alt":"${marker}"`).join(`"alt":"${jsonEscaped}"`);    // block-comment "alt":"…"
+  fs.writeFileSync(file, out);
 }
 
 async function cmdGenerate(args) {
