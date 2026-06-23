@@ -129,10 +129,18 @@ Image-bearing sections go in **pattern PHP files** referencing theme assets via
 (pattern files are PHP throughout):
 
 ```php
-<!-- wp:cover {"url":"<?php echo esc_url( get_theme_file_uri( 'assets/hero-bakery-counter.png' ) ); ?>","dimRatio":40,"align":"full"} -->
+<!-- wp:cover {"url":"<?php echo esc_url( get_theme_file_uri( 'assets/hero-bakery-counter.png' ) ); ?>","alt":"AI_IMAGE: A warm artisan bakery counter with fresh sourdough loaves, golden morning light | photorealistic | landscape","dimRatio":40,"align":"full"} -->
 <div class="wp-block-cover alignfull">...<img class="wp-block-cover__image-background" alt="AI_IMAGE: A warm artisan bakery counter with fresh sourdough loaves, golden morning light | photorealistic | landscape" src="<?php echo esc_url( get_theme_file_uri( 'assets/hero-bakery-counter.png' ) ); ?>" data-object-fit="cover"/>...</div>
 <!-- /wp:cover -->
 ```
+
+**`core/cover` and `core/image` need the marker in the block `alt` *attribute*, not just the
+`<img alt>`.** The editor serializes `alt` from the block attribute, so an `<img alt="AI_IMAGE: …">`
+with no matching `"alt"` in the block comment serializes back to `alt=""` — a mismatch that **fails
+the editor gate** (`INVALID … core/cover`) even though the frontend renders fine. Put the *same*
+marker string in both places (as above). `wpcom-images.mjs` rewrites both on generation. The
+file-level `validate-blocks.cjs` cannot see this — only the live editor gate catches it, so it's
+easy to ship by accident.
 
 Block templates (`.html`) cannot run PHP — compose them from patterns with
 `<!-- wp:pattern {"slug":"..."} /-->`. Do **not** `wp media import` + absolute URLs instead:
