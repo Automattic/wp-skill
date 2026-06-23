@@ -32,12 +32,25 @@ const page = await browser.newPage();
 await page.goto(baseUrl + '/wp-admin/post-new.php', { waitUntil: 'domcontentloaded', timeout: 60000 });
 await page.waitForFunction('window.wp && wp.blocks && wp.blocks.parse && wp.data', null, { timeout: 30000 });
 let bad = 0; const seen = [];
+const CANON_MAX = 1500; // cap inline canonical output so a huge item doesn't flood the log
 const check = async (label, markup) => {
   const res = await page.evaluate((m) => {
+    const blocks = wp.blocks.parse(m);
     const flat = []; const walk = (bs) => bs.forEach(b => { flat.push({ name: b.name, valid: b.isValid !== false }); walk(b.innerBlocks || []); });
-    walk(wp.blocks.parse(m)); return flat;
+    walk(blocks);
+    const anyBad = flat.some(b => !b.valid || b.name === 'core/missing');
+    // Serialize the canonical form (what the editor expects) only when something is invalid —
+    // the diff against your file IS the fix, saving a separate canonicalize.mjs round-trip.
+    return { flat, canonical: anyBad ? wp.blocks.serialize(blocks) : null };
   }, markup);
-  for (const b of res) if (!b.valid || b.name === 'core/missing') { bad++; console.log(`INVALID ${label} -> ${b.name}`); }
+  let labelBad = false;
+  for (const b of res.flat) if (!b.valid || b.name === 'core/missing') { bad++; labelBad = true; console.log(`INVALID ${label} -> ${b.name}`); }
+  if (labelBad && res.canonical) {
+    const c = res.canonical.trim();
+    const shown = c.length > CANON_MAX ? c.slice(0, CANON_MAX) + '\n…[truncated — run canonicalize.mjs on this file for the full form]' : c;
+    console.log(`  canonical markup the editor expects for ${label} (diff against your file):`);
+    for (const line of shown.split('\n')) console.log('    ' + line);
+  }
   seen.push(label);
 };
 for (const f of files) await check(f.split('/').slice(-2).join('/'), readFileSync(f, 'utf8'));
