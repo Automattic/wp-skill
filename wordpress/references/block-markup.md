@@ -37,6 +37,19 @@ against the site's full block registry. It must print `GATE PASS`. Then check re
 layout with a screenshot (see `design.md`) — the gate catches invalid blocks, not a hero
 rendering with gutters.
 
+**When a block is `INVALID` (or you want the canonical form), ask the live editor — don't
+hand-balance divs by trial and error:**
+
+```bash
+node scripts/checker/canonicalize.mjs <site-url> patterns/hero.php            # canonicalize a file (or "-" for stdin)
+node scripts/checker/canonicalize.mjs <site-url> --block core/cover --attrs '{"url":"x.png","alt":"...","dimRatio":50}'
+```
+
+It parses (or builds, in `--block` mode) against the running site's real registry and prints the
+**canonical** serialization to copy, plus per-block `✓`/`✗`. This is the authoritative answer to
+"the gate says INVALID — then what *is* the right markup?": the diff between your markup and the
+canonical output is the fix. (Reuses the same browser discovery as the gate; no extra setup.)
+
 ## Validity rules
 
 **One root element per block.** Each block owns exactly one root HTML element between its
