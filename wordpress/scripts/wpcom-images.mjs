@@ -542,7 +542,19 @@ function scanMarkers(files) {
       const aspect = normalizeAspect(parts[2], file);
       const src = tag.match(/assets\/([a-z0-9-]+\.png)\b/);
       if (!description || !src) {
-        jobs.push({ file, marker: alt[1], error: !description ? 'empty description' : 'no assets/<name>.png in src (lowercase a-z, 0-9, hyphens, .png)' });
+        let why = 'empty description';
+        if (description) {
+          // Diagnose the common authoring mistakes instead of just "no assets/<name>.png".
+          why = 'no assets/<name>.png in src (lowercase a-z, 0-9, hyphens, .png)';
+          if (/assets\/[^"'<>]*\/[A-Za-z0-9._-]+\.png/i.test(tag)) {
+            why = 'marker src must be FLAT — assets/<name>.png with no subdirectory (got e.g. assets/images/…); the generator writes flat into <theme>/assets/';
+          } else if (/assets\/[A-Za-z0-9._-]*[A-Z_][A-Za-z0-9._-]*\.png/.test(tag)) {
+            why = 'marker filename must be lowercase a-z, 0-9, hyphens only — no uppercase or underscores — ending .png';
+          } else if (/assets\/[a-z0-9-]+\.(?:jpe?g|webp|gif|avif)\b/i.test(tag)) {
+            why = 'marker filename must end in .png (the endpoint outputs PNG; don\'t name it .jpg)';
+          }
+        }
+        jobs.push({ file, marker: alt[1], error: why });
         continue;
       }
       jobs.push({
