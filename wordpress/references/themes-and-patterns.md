@@ -27,6 +27,16 @@ mostly because of token sloppiness that surfaces here: unreadable contrast, chil
 in flex/grid containers, buttons inheriting invisible text. Get these right at token-design
 time — there is no recovery downstream.
 
+**Don't author theme.json from scratch — start from `boilerplate/theme.json`** (resolve against
+the skill dir). It ships every rigor rule below already wired (root-padding clamp,
+`useRootPaddingAwareAlignments`, all flex/grid `blockGap` defaults, paired button/link colors) and
+a valid, WCAG-safe neutral palette. **Recolor the palette slugs and swap the two font families to
+the design; keep the slug names** (`base`/`contrast`/`primary`/`secondary`/`accent`/`surface`/
+`border`/`muted`) — every downstream file and the `styles.blocks` defaults reference them by name.
+Add slugs if the design needs more; tune `contentSize`/`wideSize`/`blockGap` to the design's
+rhythm. `scripts/scaffold-theme.sh` drops this for you (see `references/design.md` §5). The rest of
+this section is what that skeleton already encodes — read it to tune, not to re-derive.
+
 - `"version": 3`, `"$schema": "https://schemas.wp.org/trunk/theme.json"`.
 - `settings.appearanceTools: true` enables border/spacing/typography/color controls in one
   line.
@@ -61,6 +71,12 @@ pairing at palette-design time:
   gutter on desktop and overflows on mobile. Vertical rhythm lives on sections, not the body.
 - Once root padding is set, every edge-to-edge section MUST declare `"align":"full"`; content-
   width sections use `"align":"wide"`. A section with no `align` renders at the narrow column.
+- **Section margin reset — on EVERY top-level group/section:** add
+  `"style":{"spacing":{"margin":{"top":"0"}}}`. WordPress applies a default top margin to direct
+  children of `.wp-site-blocks`; without the reset, sections inherit it and the page's vertical
+  rhythm comes from stray margins instead of the section padding you control. Pair it with
+  `align:full`/`wide` on the same wrapper. (`boilerplate/style-base.css` zeroes the footer's; the
+  per-section reset still has to live in the markup.)
 
 ### Gap defaults (flex/grid containers don't space children — set these or they touch)
 WordPress's flex (`navigation`, `buttons`) and grid (`post-template`) layouts apply **zero gap**

@@ -9,7 +9,18 @@ milliseconds with no editor — directly removing the ~40% firefighting below. I
 files that actually contain an INVALID block (valid files are left untouched, so it doesn't churn
 good markup to the pinned-package form). The block-markup loop and SKILL rule 3 now lead with it.
 This **supersedes most of the "block-snippets" idea** (item 3 below): curing bad markup
-automatically beats shipping snippets to copy. Items 4–5 (theme.json skeleton, scaffold) still stand.
+automatically beats shipping snippets to copy.
+
+**Items 4 and 5 are now also implemented.** (4) `boilerplate/theme.json` (rigor pre-filled, valid
+WCAG-safe neutral palette) + `boilerplate/style-base.css` (loop utilities, equal-cards, footer
+reset), with the section-margin-reset mandate added to `themes-and-patterns.md`. (5)
+`scripts/scaffold-theme.sh` drops the skeleton + base CSS + motion runtime (enqueued frontend-only)
++ `boilerplate/content-loader.php` in one command; `content-loader.php` self-registers pages from
+`content/pages/*.html` and promotes `home` to the static front page — **verified end-to-end in a
+real Playground: the front page renders the designed home, not "Hello world"** (the eval's
+front-page bug, fixed by boilerplate). `design.md` §5 now leads with the scaffold and SKILL rule 8
+makes it the first build step, so the rigor and motion can't be skipped. All five analysis items
+plus the two doc nudges (reduced-motion captures, batch visual-gate) are done.
 
 Analysis of `sessions/tbilisi-tavern1-design-quality-port.md` (a full build on the
 design-quality branch) + Telex's boilerplate strategy, against the four asks: simplify/remove

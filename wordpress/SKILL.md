@@ -65,12 +65,14 @@ Run `scripts/playground.sh` from the project directory (its state lives in `./wo
    to that brief (still shown and approved in the browser — not silently skipped). Build what the
    user asked for; previews confirm the execution, they don't reopen a decision the brief already
    made.
-8. **A new theme isn't built until the five-step build sequence runs** (`references/design.md`
-   §5): site spec (`site-spec.md`) → theme.json rigor (`themes-and-patterns.md`) → page-frame
-   CSS for the layoutMode (`layout-modes.md`) → page composition (`aesthetics.md`) → scroll
-   motion (`motion.md`). Read each reference when you reach its step. A theme that renders pages
-   but skips the site spec or ships zero motion is an incomplete build, not a done one — these
-   are exactly the steps that separate a designed site from generic AI output.
+8. **A new theme isn't built until the build sequence runs** (`references/design.md` §5):
+   **scaffold** (`scripts/scaffold-theme.sh` — drops theme.json rigor, base CSS, motion runtime,
+   content-loader) → site spec (`site-spec.md`) → recolor theme.json (`themes-and-patterns.md`) →
+   page-frame CSS for the layoutMode (`layout-modes.md`) → page composition (`aesthetics.md`) →
+   scroll-motion hooks (`motion.md`). Scaffold first so the rigor and motion can't be skipped; do
+   not hand-write theme.json/style.css boilerplate or hand-roll page creation / front-page wiring
+   (`content-loader.php` does it). A theme that renders pages but skips the site spec or ships zero
+   motion is an incomplete build — these are the steps that separate a designed site from AI slop.
 9. **Image handling needs an explicit choice — always ask, before design previews and any
    markup. Being logged in is not consent.** Check `workdir/.playground/images.json` first (a recorded
    answer is the only thing that skips the question), then follow `references/images-media.md`:

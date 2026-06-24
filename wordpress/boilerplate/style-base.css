@@ -1,0 +1,106 @@
+/* ------------------------------------------------------------------------- *
+ * Theme base — design-agnostic structural CSS every theme needs.
+ *
+ * This is a FRAGMENT, not a full stylesheet: it carries no WordPress theme
+ * header comment. It is meant to sit at the top of your `style.css`, right
+ * after the theme header, with your design-specific custom CSS appended below.
+ * (scaffold-theme.sh writes `style.css` = theme header + this fragment.)
+ *
+ * Colours/spacing reference theme.json preset tokens, so it adapts to whatever
+ * palette and spacing scale the theme defines — do not hardcode values here.
+ * Keep these rules: they fix WordPress defaults that otherwise make sections
+ * and cards touch. Tune only where a comment says so.
+ * ------------------------------------------------------------------------- */
+
+/* Footer sits flush under the last section (WP adds a default top margin). */
+.wp-site-blocks > footer {
+    margin-block-start: 0;
+}
+
+/* ---------- Equal-height card rows ---------- *
+ * For a row of cards with optional bottom-pinned CTAs: put className "equal-cards"
+ * on the wp:columns, and "cta-bottom" on each card's wp:buttons. */
+.equal-cards > .wp-block-column {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 0;
+}
+.equal-cards > .wp-block-column > .wp-block-group {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+}
+.equal-cards .cta-bottom {
+    margin-top: auto;
+}
+
+/* ---------- Query-loop layout utilities ---------- *
+ * Put one of these is-style-* classes on a wp:query block to reshape its
+ * wp:post-template. Structural only — colours/spacing come from theme.json. */
+
+/* Horizontal scroll-snap rail */
+.wp-block-query.is-style-loop-rail .wp-block-post-template {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: thin;
+    gap: var(--wp--preset--spacing--40);
+    padding-bottom: var(--wp--preset--spacing--20);
+}
+.wp-block-query.is-style-loop-rail .wp-block-post-template > * {
+    flex: 0 0 320px;
+    scroll-snap-align: start;
+}
+
+/* Compact list with hairline row dividers */
+.wp-block-query.is-style-loop-list .wp-block-post-template > * {
+    border-bottom: 1px solid var(--wp--preset--color--border, currentColor);
+    padding-block: var(--wp--preset--spacing--30);
+}
+.wp-block-query.is-style-loop-list .wp-block-post-template > *:last-child {
+    border-bottom: 0;
+}
+
+/* Zigzag — flip the columns inside every even entry */
+.wp-block-query.is-style-loop-zigzag .wp-block-post-template > *:nth-child(even) .wp-block-columns {
+    flex-direction: row-reverse;
+}
+
+/* Timeline — vertical line with node markers per entry */
+.wp-block-query.is-style-loop-timeline .wp-block-post-template {
+    position: relative;
+    padding-inline-start: 2.5rem;
+}
+.wp-block-query.is-style-loop-timeline .wp-block-post-template::before {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0.5rem;
+    width: 2px;
+    background: currentColor;
+    opacity: 0.15;
+}
+.wp-block-query.is-style-loop-timeline .wp-block-post-template > * {
+    position: relative;
+}
+.wp-block-query.is-style-loop-timeline .wp-block-post-template > *::before {
+    content: "";
+    position: absolute;
+    inset-inline-start: -2.25rem;
+    inset-block-start: 0.6rem;
+    width: 1rem;
+    height: 1rem;
+    border: 2px solid currentColor;
+    border-radius: 50%;
+    background: var(--wp--preset--color--base, #fff);
+}
+
+/* Magazine — first child spans 2 columns of a grid post-template */
+.wp-block-query.is-style-loop-magazine .wp-block-post-template > *:first-child {
+    grid-column: span 2;
+}
+@media (max-width: 600px) {
+    .wp-block-query.is-style-loop-magazine .wp-block-post-template > *:first-child {
+        grid-column: auto;
+    }
+}

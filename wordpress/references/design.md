@@ -150,29 +150,40 @@ preview; the rest of the site extends its visual language.
 ### 5. Build the theme in this order — every step is required, not optional
 
 A theme built straight from the preview without these steps reads as generic AI output. Do **all
-five**, in order, before handing back. Skipping any of them is an incomplete build, not a
-shortcut — the motion pass in particular is what separates a live-feeling site from AI slop, and
-it is the most common omission. Read each named reference when you reach its step.
+of them**, in order, before handing back. Skipping any is an incomplete build — the motion pass in
+particular is what separates a live-feeling site from AI slop, and it's the most common omission.
+Read each named reference when you reach its step.
 
+0. **Scaffold the theme** — `scripts/scaffold-theme.sh <theme-dir> "<Theme Name>"`. One command
+   drops the boilerplate you'd otherwise hand-write and frequently get wrong: `theme.json` with all
+   the rigor already wired (root padding, `useRootPaddingAwareAlignments`, every flex/grid
+   `blockGap` default, paired button/link colors), `style.css` (theme header + base utilities:
+   loop layouts, equal-cards, footer reset), `functions.php` (motion runtime enqueued frontend-only
+   + a fonts hook), `content-loader.php`, and `assets/motion/`. Steps 2 and 5 below become *fill in
+   the blanks*, not *write from scratch*.
 1. **Write the site spec** — `references/site-spec.md`. Derive `workdir/.playground/site-spec.json`
    from the chosen direction + brief: `layoutMode`, `headerBehavior`, `contentMode`, the cinematic
    `heroComposition`, typography. Every later file branches on it; deciding it once up front is
    what stops the build from defaulting to a generic vertical stack with a guessed header.
-2. **theme.json with the rigor rules** — `references/themes-and-patterns.md`: WCAG-AA contrast,
-   `useRootPaddingAwareAlignments: true`, the required flex/grid `blockGap` defaults
-   (navigation, buttons, post-template), and paired background+text on every block/element color.
+2. **Make the scaffolded theme.json the design's** — `references/themes-and-patterns.md`. Recolor
+   the 8 palette slugs to the direction (keep the slug names), swap the two font families to the
+   design's (not Inter/Roboto/Arial), and tune `contentSize`/`wideSize`/`blockGap` to the spec.
+   The rigor is already there — verify WCAG-AA contrast on your new colors; don't re-derive the
+   structure.
 3. **Page-frame CSS for the layoutMode** — if `layoutMode` is anything other than
    `vertical-stack`, follow `references/layout-modes.md` for the sidebar/landing/magazine/gallery
    shell and the sticky/overlay header contract.
 4. **Compose the pages** — `references/aesthetics.md`: commit to the aesthetic, plan one line per
    page (section count + archetypes), give the homepage the richest treatment (≥3 unique
-   sections), and ensure every page has at least one section the others don't.
-5. **Add motion before hand-back** — `references/motion.md`. Copy `assets/motion/{motion.css,
-   motion.js}` into the theme, enqueue them frontend-only, and add the class hooks: section
-   reveal is always-on; pick 1–2 richer homepage effects within the budget. A static theme is an
-   unfinished theme.
+   sections), and ensure every page has at least one section the others don't. Write each page as
+   `content/pages/<slug>.html` (name the home page `home.html`); `content-loader.php` self-registers
+   them as pages and promotes `home` to the static front page — do NOT hand-roll `wp_insert_post`,
+   a temp setup PHP, or `playground.sh front-page`.
+5. **Add motion before hand-back** — `references/motion.md`. The runtime is already copied and
+   enqueued by the scaffold, so just add the class hooks: section reveal is always-on; pick 1–2
+   richer homepage effects within the budget. A static theme is an unfinished theme.
 
-(On the skip path — user declined the gallery — still run all five steps from the single
+(On the skip path — user declined the gallery — still run all these steps from the single
 direction you chose.)
 
 ## Verify and polish from evidence, not pixels
@@ -196,7 +207,10 @@ and owns spacing). Diagnose from the rendered DOM, then fix in one batch:
    node <skill-dir>/scripts/checker/visual-gate.mjs "$URL" --paths /,/journal/,/about/ --viewports desktop,mobile
    ```
    It writes `visual-<page>-<viewport>.png` for each page and exits non-zero if any page 404s or
-   renders blank. Always do the mobile pass, not just desktop.
+   renders blank. Always do the mobile pass, not just desktop. Both tools emulate
+   `prefers-reduced-motion: reduce`, so `reveal-on-scroll` sections capture at full opacity — a
+   full-page shot shows the real content, not blank pre-reveal bands. Don't chase a "blank" section
+   that's only mid-reveal; the capture already accounts for motion.
 2. **Diagnose every section before fixing anything.** For each issue the screenshots show,
    inspect the live DOM and computed styles (Playwright `page.evaluate` with
    `getComputedStyle`, bounding boxes vs viewport width) to find the actual cause — the
