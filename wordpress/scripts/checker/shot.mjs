@@ -25,6 +25,12 @@ async function launchBrowser() {
 
 const browser = await launchBrowser();
 const page = await browser.newPage({ viewport: { width: +w, height: +h } });
+// Emulate reduced motion so scroll-reveal content (the motion.css `.reveal-on-scroll`
+// opacity:0-until-in-view rule, gated on prefers-reduced-motion: no-preference) renders at full
+// opacity — a full-page screenshot can't scroll each section into view, so without this every
+// below-the-fold reveal section captures BLANK. Reduced motion is the documented static fallback;
+// it makes one shot faithful and avoids "is this blank or just pre-reveal?" investigation.
+await page.emulateMedia({ reducedMotion: 'reduce' });
 await page.goto(url, { waitUntil: 'networkidle', timeout: 60000 });
 await page.waitForTimeout(800);
 await page.screenshot({ path: out, fullPage: true });

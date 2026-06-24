@@ -53,6 +53,9 @@ let failures = 0, shots = 0;
 for (const vp of viewports) {
   const [w, h] = VIEWPORTS[vp];
   const page = await browser.newPage({ viewport: { width: w, height: h } });
+  // Reduced motion → scroll-reveal sections (motion.css `.reveal-on-scroll`) render at full
+  // opacity in the full-page capture, so a motion theme isn't shot mid-reveal and read as blank.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   for (const p of paths) {
     const url = new URL(p, baseUrl).toString();
     const file = path.join(outDir, `visual-${slug(p)}-${vp}.png`);

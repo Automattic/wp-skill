@@ -77,12 +77,18 @@ or founder story — not a generic features grid.
 
 ### E. Count-up stats — needs `motion.js`
 Stat numbers count from 0 to their target on enter-view. Use only when the page has 2–4
-genuine stat numbers. `data-counter-target` is required; `-suffix`/`-prefix` optional:
+genuine stat numbers. `data-counter-target` is required; `-suffix`/`-prefix` optional.
+
+**Use a `wp:html` span, NOT a `core/heading`.** Custom `data-*` attributes on `core/heading`
+(or any core block) fail the editor gate — the block's saved markup won't match and the editor
+reports "invalid content." `wp:html` is freeform, so the `data-counter-target` attribute is
+valid there, and `motion.js`'s `.counter[data-counter-target]` selector matches it the same.
+Size/weight/color it from `style.css` (the `.counter` / a `.stat-num` class), not block attrs:
 
 ```html
-<!-- wp:heading {"className":"counter"} -->
-<h2 class="wp-block-heading counter" data-counter-target="600000" data-counter-suffix="+">0</h2>
-<!-- /wp:heading -->
+<!-- wp:html -->
+<span class="counter stat-num" data-counter-target="600000" data-counter-suffix="+">0</span>
+<!-- /wp:html -->
 ```
 
 ### Header on-scroll variants — pick AT MOST one
