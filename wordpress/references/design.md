@@ -2,9 +2,25 @@
 
 ## New site or material redesign: browser previews, not text options
 
-Before building a new site/theme (or materially redesigning one), run this workflow. Skip it
-entirely for small edits, or if the user says to skip — then proceed with your single best
-direction and say which you chose.
+Before building a new site/theme (or materially redesigning one), pick the preview path that
+matches how constrained the brief is — there are **three**, not two:
+
+- **Vague or open brief, or a material redesign → full 4-preview gallery.** The default workflow
+  below (steps 1–4): four divergent directions judged side by side in the browser. Use this
+  whenever the brief leaves the aesthetic genuinely open.
+- **Tightly-specified brief → one preview ("single best direction").** When the brief already
+  pins palette/genre/mood (e.g. *"minimalist photojournalism portfolio, Buenos Aires"* — it
+  names the aesthetic, not just the topic), don't manufacture four directions to discard three.
+  Commit to the single direction the brief implies, render **one** first-fold preview, show it
+  in the browser, and record it as a 1-element `directions.json`. Proceed once the user approves
+  (or asks for tweaks). This is a real preview the user judges — **not** a silent skip, and not
+  four-preview ceremony the brief doesn't warrant.
+- **Small edit, or the user says skip → no preview.** Proceed with your single best direction
+  and say which you chose.
+
+The single-direction path **is** the previews workflow below — image handling first, render
+first-fold HTML, serve over HTTP, show in the browser, carry the choice forward as the contract
+— just with one option instead of four. Everything else in this file applies unchanged.
 
 **First, resolve image handling** (`references/images-media.md`): ask the user — always, even
 when already logged in — how to handle imagery, presenting the four options (generate AI photos
@@ -24,7 +40,8 @@ covering hero composition, color world (specific hex codes), typography (specifi
 names), spatial rhythm, and mood. Scale divergence to the brief: vague brief → 4 radically
 different directions; specific brief → keep the user's constraints, vary only what they left
 open. Each description must be self-contained (no "same as option 1"). Save them as
-`directions.json` in the preview dir (step 3).
+`directions.json` in the preview dir (step 3). (**Single-direction path:** write just the one
+direction the brief implies, as a 1-element array — same shape, one entry.)
 
 ### 2. Render each direction as a first-fold HTML preview
 
@@ -64,6 +81,8 @@ For each direction, generate one complete, self-contained HTML document:
 Write everything to `workdir/previews/` in the project (clear it first if a prior redesign
 left option dirs there): `directions.json`, `option-1/preview.html` … `option-4/preview.html`,
 and `index.html` — a 2×2 grid of `<iframe>`s, each labeled with its option number and title.
+(**Single-direction path:** write the one `option-1/preview.html` and serve it directly — same
+HTTP-serve rule below; show that single preview full-cell instead of a 2×2 grid.)
 (`workdir/` is the project's gitignored scratch area — persistent across reboots, so generated
 preview images aren't silently wiped from `/tmp` and don't have to be re-generated.)
 
