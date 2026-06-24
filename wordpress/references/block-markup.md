@@ -7,21 +7,37 @@ check never sees. So validation is two gates, and the editor gate is the authori
 
 ## The two-gate loop
 
-**Inner loop — after writing any template/part markup, before declaring it done:**
+**Inner loop — after writing OR editing any template / part / pattern / content markup, before
+declaring it done. Two steps: auto-repair, then confirm.** (One-time setup in `scripts/checker/`:
+`npm install`.)
+
+**1. Auto-repair first — don't hand-fix validity, and don't open the editor to fix it:**
+
+```bash
+node scripts/checker/fix-blocks.cjs <files...>      # add --dry to preview
+```
+
+This re-creates every named block from its parsed attributes (`createBlock` → `serialize`),
+regenerating the exact markup WordPress `save()` produces. It fixes the recurring INVALID cases
+mechanically, in milliseconds, with **no browser and no live site**: cover `<img>`/`<span>` order
++ `has-background-dim` class + required `alt=""`, border-shorthand classes (`has-border-color`),
+element/attribute/CSS-property order, and dropped unknown attributes. Freeform `wp:html` blocks
+and pattern PHP headers are left untouched. Run it on every file you just wrote or changed — it is
+the answer to "the editor would flag this," without paying for the editor.
+
+**2. Confirm what's left:**
 
 ```bash
 node scripts/checker/validate-blocks.cjs <files...>
 ```
 
-(One-time setup in `scripts/checker/`: `npm install`.) Three outcomes:
+Three outcomes:
 
-- `INVALID` — fix it. The markup doesn't match what the block's save function produces.
+- `INVALID` — fix-blocks couldn't auto-repair it (rare: genuinely malformed nesting parse() can't
+  recover, or a non-core block). This is the only case that needs hand work or the editor below.
 - `LINT` — fix it (`core/missing`, `core/freeform`, raw `<style>` tags, unknown block types).
-- `NORMALIZE` — **warning only.** The markup parses valid but is a deprecated form. Do NOT
-  "fix" it by hand-editing the HTML; if you want canonical markup, regenerate the block from
-  its attributes — or run `validate-blocks.cjs --fix <files>` to rewrite NORMALIZE-only files to
-  `serialize(parse())` automatically (it never touches INVALID/LINT files). Never treat a
-  NORMALIZE warning as a failure.
+- `NORMALIZE` — **warning only.** Deprecated-but-valid form; fix-blocks already rewrites these to
+  canonical. Never treat a NORMALIZE warning as a failure.
 
 The inner loop validates against pinned core packages only — plugin blocks, PHP patterns,
 and the site's actual WP version are invisible to it.
@@ -45,8 +61,9 @@ single gate run usually tells you both *what* is wrong and *what* it should be).
 rendered layout with a screenshot (see `design.md`) — the gate catches invalid blocks, not a
 hero rendering with gutters.
 
-**When a block is `INVALID` (or you want the canonical form), ask the live editor — don't
-hand-balance divs by trial and error:**
+**Only if `validate-blocks.cjs` still reports `INVALID` after `fix-blocks.cjs` (rare)** — the
+block is beyond mechanical repair. Ask the live editor for the canonical form rather than
+hand-balancing divs by trial and error:
 
 ```bash
 node scripts/checker/canonicalize.mjs <site-url> patterns/hero.php            # canonicalize a file (or "-" for stdin)

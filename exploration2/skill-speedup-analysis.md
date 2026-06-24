@@ -1,5 +1,16 @@
 # Speeding up the wordpress skill without degrading design quality
 
+**Implemented so far:** (1) the counter-markup bug in `motion.md`; (2) reduced-motion default in
+`shot.mjs`/`visual-gate.mjs`; (3) **`scripts/checker/fix-blocks.cjs`** — a browser-free programmatic
+block-validity fixer ported from Telex (`registerCoreBlocks` in jsdom → `parse` → rebuild each
+block via `createBlock` → `serialize`). It auto-repairs the recurring INVALID cases (cover
+img/span order + `has-background-dim` + `alt=""`, border-shorthand classes, element/attr order) in
+milliseconds with no editor — directly removing the ~40% firefighting below. It only rewrites
+files that actually contain an INVALID block (valid files are left untouched, so it doesn't churn
+good markup to the pinned-package form). The block-markup loop and SKILL rule 3 now lead with it.
+This **supersedes most of the "block-snippets" idea** (item 3 below): curing bad markup
+automatically beats shipping snippets to copy. Items 4–5 (theme.json skeleton, scaffold) still stand.
+
 Analysis of `sessions/tbilisi-tavern1-design-quality-port.md` (a full build on the
 design-quality branch) + Telex's boilerplate strategy, against the four asks: simplify/remove
 unnecessary agent work, port Telex's hardcoded spacing fixes, simplify the gates + make visual
