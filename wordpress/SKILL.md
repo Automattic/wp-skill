@@ -33,8 +33,8 @@ Run `scripts/playground.sh` from the project directory (its state lives in `./wo
 ## Non-negotiable rules
 
 1. **Local WordPress = Playground via `scripts/playground.sh`** (verbs:
-   `bootstrap | ensure | wp | stop`). Docker is banned. Never hand-roll a MySQL/PHP stack,
-   never wp-now.
+   `bootstrap | ensure | wp | front-page | status | stop`). Docker is banned. Never hand-roll a
+   MySQL/PHP stack, never wp-now.
 2. **Local sites you created are disposable; production is not.** Before any destructive
    write to a user-designated production site, create and verify a backup manifest
    (`references/backups-and-safety.md`). If the user says to skip it, refuse — creating one
@@ -57,7 +57,11 @@ Run `scripts/playground.sh` from the project directory (its state lives in `./wo
    hardcode or assume one.
 7. **For new sites/redesigns, users choose from rendered HTML previews in a browser**
    (`references/design.md`) — never from text directions, terminal option lists, or ASCII
-   mockups.
+   mockups. The number of previews scales to the brief: an open brief or material redesign gets
+   the 4-direction gallery; a tightly-specified brief gets a **single** first-fold preview built
+   to that brief (still shown and approved in the browser — not silently skipped). Build what the
+   user asked for; previews confirm the execution, they don't reopen a decision the brief already
+   made.
 8. **A new theme isn't built until the five-step build sequence runs** (`references/design.md`
    §5): site spec (`site-spec.md`) → theme.json rigor (`themes-and-patterns.md`) → page-frame
    CSS for the layoutMode (`layout-modes.md`) → page composition (`aesthetics.md`) → scroll

@@ -8,7 +8,8 @@ the only sanctioned local server path:
   die with your session and daemons get orphaned).
 - **Never wp-now** (second lifecycle, second port default, no unique capability).
 
-One server tool, one lifecycle, four verbs. Run all commands from the **project directory**
+One server tool, one lifecycle. The core verbs (`bootstrap`, `ensure`, `wp`, `stop`) plus the
+`front-page` and `status` convenience verbs. Run all commands from the **project directory**
 (state lives in `./workdir/.playground/`); call the script by its absolute path under this skill's
 `scripts/` directory.
 
@@ -32,13 +33,15 @@ everything the agent generates as working state goes under `workdir/`, which `bo
 gitignored (`workdir/.gitignore` = `*`). Mount the theme from the root, e.g.
 `./my-theme:/wordpress/wp-content/themes/my-theme`.
 
-## The four verbs
+## The verbs
 
 | Verb | When to call it |
 |---|---|
 | `playground.sh bootstrap [dir]` | Once per project, before anything else. Creates a real Playground site and records its location in `workdir/.playground/site-dir`. Safe to re-run (no-ops if bootstrapped). |
 | `playground.sh ensure [host:vfs ...]` | Whenever you need the server running. Convergent and safe to re-run blindly: reuses a healthy server, restarts if the mount set changed, starts fresh otherwise. Pass each directory the site must see (e.g. a theme you are writing) as `./my-theme:/wordpress/wp-content/themes/my-theme`. |
 | `playground.sh wp -- <wp-cli args>` | Any wp-cli command. There is no local `wp` binary and no other working wp-cli path on Playground; this verb runs the pinned phar against the same site and the **same mount set** as the server. |
+| `playground.sh front-page <home-id> [posts-id]` | Set a static front page (and optional posts page) so routing actually sticks. Wraps the `wp eval` recipe below — use it instead of `wp option update`. |
+| `playground.sh status` | Fast snapshot from recorded state (no wp/npx spawn): bootstrapped? server running + port? recorded mounts? + the relaunch command. Run it at the start of a session instead of guessing or improvising a tracker. |
 | `playground.sh stop` | Only when the user asks to shut down, or when you must restart to change mounts — **not** as a reflex when a build is "done" (the user needs the site live to test). Stops the server by process group and **asserts** nothing survives — treat a failed assertion as a real bug, not noise. |
 
 Typical session:
@@ -78,10 +81,15 @@ echo "Test it: http://127.0.0.1:$(cat workdir/.playground/server.port)/<path-or-
   keeps them — the recorded set is whatever the last call specified.
 - The Playground blueprint `wp-cli` step swallows stdout (exit 0, no output). Use the `wp`
   verb instead.
-- **Set the static front page with `wp eval`, not `wp option update`.** On Playground,
-  `wp option update show_on_front|page_on_front|page_for_posts` can report
-  `Value … is unchanged` and silently no-op, so a front-page/posts-page theme never routes.
-  Set the options through `update_option` and flush rewrites, using the real page IDs:
+- **Set the static front page with the `front-page` verb (or `wp eval`), never `wp option
+  update`.** On Playground, `wp option update show_on_front|page_on_front|page_for_posts` can
+  report `Value … is unchanged` and silently no-op, so a front-page/posts-page theme never
+  routes. The `front-page` verb does the write-and-verify in one call:
+  ```bash
+  playground.sh front-page FRONT_ID POSTS_ID   # POSTS_ID optional; sets options, flushes, prints the result
+  ```
+  It wraps exactly this (set options through `update_option`, flush rewrites, verify from options
+  — the IDs ride inside the eval string, so the numeric-arg drop below doesn't bite):
   ```bash
   playground.sh wp -- eval 'update_option("show_on_front","page"); update_option("page_on_front", FRONT_ID); update_option("page_for_posts", POSTS_ID);'
   playground.sh wp -- rewrite flush --hard

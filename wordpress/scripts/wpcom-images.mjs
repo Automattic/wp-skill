@@ -20,6 +20,10 @@
  *                             (`! node … auth`) and keep the token out of the chat. NOT echoed.
  *   status                    who is logged in + a live check of whether this token can actually
  *                             generate.
+ *   check --files <f...>      no auth, no network: static pre-flight of AI_IMAGE markers —
+ *                             bad/subdir/case/extension src, cover/image alt-mirror desync,
+ *                             mixed aspects in a row/grid, duplicate target with differing
+ *                             prompts. Exit 1 if any issue. Cheap pre-gate before the block gates.
  *   generate --files <f...> [--concurrency N]   scan theme files for AI_IMAGE alt markers,
  *                             generate each into <theme>/assets/<name>.png (in batches of N,
  *                             default 4), rewrite alts to human text.
@@ -741,6 +745,91 @@ function reportHardFailure(res) {
   process.exit(1);
 }
 
+// ---------- check (no auth, no network): static marker pre-flight ----------
+
+function checkAltMirror(file, issues) {
+  // core/cover serializes its background-image alt from the BLOCK "alt" attribute, so a cover
+  // whose <img alt="AI_IMAGE:…"> has no matching block-comment "alt" passes the file-level
+  // validate-blocks.cjs yet FAILS the live editor gate (and re-desyncs after generation). This is
+  // its static counterpart. (core/image is exempt: its alt round-trips through the <img> element,
+  // so the <img alt> alone is valid — verified against the live registry, 2026-06.)
+  const text = fs.readFileSync(file, 'utf8');
+  for (const m of text.matchAll(/<!--\s*wp:(cover)\b([\s\S]*?)-->/g)) {
+    const type = m[1];
+    const attrs = m[2];
+    // Look only inside THIS block's own body — stop at the next block delimiter so we don't
+    // grab a sibling block's <img> when this one has none.
+    const after = text.slice(m.index + m[0].length);
+    const bound = after.search(/<!--\s*\/?wp:/);
+    const region = bound === -1 ? after : after.slice(0, bound);
+    const imgTag = region.match(/<img\b(?:<\?php[\s\S]*?\?>|[^>])*>/);
+    if (!imgTag) continue;
+    const imgAlt = imgTag[0].match(/alt="(AI_IMAGE:[^"]*)"/);
+    if (!imgAlt) continue; // no marker on this block's image — nothing to mirror
+    const blockAlt = attrs.match(/"alt"\s*:\s*"(AI_IMAGE:[^"]*)"/);
+    if (!blockAlt) {
+      issues.push(`${path.basename(file)}: core/${type} has <img alt="${imgAlt[1]}"> but no matching "alt" in the block comment — the editor serializes alt from the block attribute, so this FAILS the editor gate. Put the same marker in the block JSON "alt".`);
+    } else if (blockAlt[1] !== imgAlt[1]) {
+      issues.push(`${path.basename(file)}: core/${type} marker mismatch — <img alt="${imgAlt[1]}"> vs block "alt":"${blockAlt[1]}". They must be byte-identical.`);
+    }
+  }
+}
+
+function checkGridAspects(file, issues) {
+  // Images shown together in a row/grid (cards, gallery, team) MUST share one aspect — never
+  // mix. Catch differing marker aspects inside a single columns/gallery container.
+  const text = fs.readFileSync(file, 'utf8');
+  for (const m of text.matchAll(/<!--\s*wp:(columns|gallery)\b[\s\S]*?<!--\s*\/wp:\1\s*-->/g)) {
+    const container = m[0];
+    const aspects = new Set();
+    for (const im of container.matchAll(/<img\b(?:<\?php[\s\S]*?\?>|[^>])*>/g)) {
+      const alt = im[0].match(/alt="AI_IMAGE:([^"]*)"/);
+      if (!alt) continue;
+      aspects.add(normalizeAspect((alt[1].split('|')[2] || '').trim()));
+    }
+    if (aspects.size > 1) {
+      issues.push(`${path.basename(file)}: a core/${m[1]} mixes aspect ratios (${[...aspects].join(', ')}) across its AI_IMAGE markers — images in one row/grid must share a single aspect.`);
+    }
+  }
+}
+
+async function cmdCheck(args) {
+  // Static pre-flight for AI_IMAGE markers — zero network, no auth. Run it before the block
+  // gates (or any time) to catch authoring mistakes that only surface mid-`generate` otherwise.
+  const fi = args.indexOf('--files');
+  const files = fi === -1 ? [] : args.slice(fi + 1).filter(a => !a.startsWith('--'));
+  if (!files.length) { console.error('Usage: check --files <theme files...>'); process.exit(2); }
+
+  const issues = [];
+  const jobs = scanMarkers(files);
+  // 1. Per-marker authoring errors (empty / subdir / case / extension) — reuse scanMarkers' hints.
+  for (const j of jobs.filter(j => j.error)) {
+    issues.push(`${path.basename(j.file)}: bad marker "${j.marker}" — ${j.error}`);
+  }
+  // 2. cover/image alt-mirror + 3. grid/row aspect consistency (structural, per file).
+  for (const f of files) { checkAltMirror(f, issues); checkGridAspects(f, issues); }
+  // 4. Duplicate target filename with differing prompts — markers sharing a target generate once
+  //    and share the result, so their descriptions must match (or the files must differ).
+  const byTarget = new Map();
+  for (const j of jobs.filter(j => !j.error)) {
+    if (!byTarget.has(j.target)) byTarget.set(j.target, new Set());
+    byTarget.get(j.target).add(j.description);
+  }
+  for (const [target, descs] of byTarget) {
+    if (descs.size > 1) {
+      issues.push(`${path.relative(process.cwd(), target)}: ${descs.size} markers point at this one file with DIFFERENT prompts — they generate once and share the image, so use identical descriptions or distinct filenames.`);
+    }
+  }
+
+  if (!issues.length) {
+    console.log(`check: ${jobs.length} AI_IMAGE marker(s) across ${files.length} file(s) — no issues (no network calls made).`);
+    return;
+  }
+  console.error(`check: ${issues.length} issue(s) found (no network calls made):`);
+  for (const i of issues) console.error(`  - ${i}`);
+  process.exit(1);
+}
+
 // ---------- main ----------
 
 const [, , cmd, ...rest] = process.argv;
@@ -751,8 +840,9 @@ try {
   else if (cmd === 'status') await cmdStatus();
   else if (cmd === 'generate') await cmdGenerate(rest);
   else if (cmd === 'placeholders') await cmdPlaceholders(rest);
+  else if (cmd === 'check') await cmdCheck(rest);
   else {
-    console.log('Usage: wpcom-images.mjs <login | auth-url | auth [--token <t>] | status | generate --files <f...> [--concurrency N] | generate --prompt <p> --out <f.png> [--aspect <a>] | placeholders --files <f...>>');
+    console.log('Usage: wpcom-images.mjs <login | auth-url | auth [--token <t>] | status | check --files <f...> | generate --files <f...> [--concurrency N] | generate --prompt <p> --out <f.png> [--aspect <a>] | placeholders --files <f...>>');
     process.exit(cmd ? 2 : 0);
   }
 } catch (e) {
