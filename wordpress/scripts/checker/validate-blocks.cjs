@@ -13,6 +13,9 @@
  *                 the Playwright editor gate is the final authority).
  *
  * Usage:  node validate-blocks.cjs <file.html> [...]     (block markup files: templates/parts)
+ *         node validate-blocks.cjs --fix <file.html> [...] (rewrite NORMALIZE-only files to the
+ *                                                         canonical serialize(parse()) form;
+ *                                                         INVALID/LINT files are NEVER touched)
  *         node validate-blocks.cjs --self-check          (three-sample gate; run before any
  *                                                         version bump and in CI)
  * Exit: 0 = no INVALID and no LINT (NORMALIZE warnings allowed); 1 otherwise.
@@ -185,22 +188,40 @@ function selfCheck() {
 
 const args = process.argv.slice(2);
 if (args[0] === '--self-check') selfCheck();
-if (args.length === 0) {
-  console.error('usage: node validate-blocks.cjs <file.html> [...] | --self-check');
+const fix = args.includes('--fix');
+const files = args.filter((a) => a !== '--fix');
+if (files.length === 0) {
+  console.error('usage: node validate-blocks.cjs [--fix] <file.html> [...] | --self-check');
   process.exit(1);
 }
 
 const fs = require('fs');
 let invalidCount = 0;
 let lintCount = 0;
-for (const f of args) {
-  const r = checkMarkup(f, fs.readFileSync(f, 'utf8'));
+let fixedCount = 0;
+for (const f of files) {
+  const src = fs.readFileSync(f, 'utf8');
+  const r = checkMarkup(f, src);
   for (const m of r.invalid) console.log(`INVALID   ${m}`);
   for (const m of r.lint) console.log(`LINT      ${m}`);
   for (const m of r.normalize) console.log(`NORMALIZE ${m}`);
   invalidCount += r.invalid.length;
   lintCount += r.lint.length;
+  // --fix: ONLY rewrite files whose sole finding is NORMALIZE — re-serialize the parsed markup
+  // (the canonical deprecated-form migration). Never touch INVALID/LINT: their save mismatch is a
+  // real bug to fix by hand, and serialize() of an invalid block can emit its originalContent.
+  if (fix && r.invalid.length === 0 && r.lint.length === 0 && r.normalize.length > 0) {
+    try {
+      const canonical = serialize(parse(src));
+      fs.writeFileSync(f, canonical.endsWith('\n') ? canonical : canonical + '\n');
+      console.log(`FIXED     ${f}: rewrote to canonical serialize(parse())`);
+      fixedCount++;
+    } catch (e) {
+      console.log(`FIX-SKIP  ${f}: ${e.message}`);
+    }
+  }
 }
+if (fix) console.log(`(--fix: ${fixedCount} NORMALIZE file(s) rewritten; INVALID/LINT left untouched)`);
 console.log(
   invalidCount + lintCount === 0
     ? 'OK (normalization warnings, if any, are non-fatal)'

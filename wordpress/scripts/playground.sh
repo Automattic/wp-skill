@@ -6,6 +6,7 @@
 #   playground.sh bootstrap [project-dir]          one-time: create site, record workdir/.playground/site-dir
 #   playground.sh ensure   [host:vfs ...]          idempotent: converge to a running server (+ mounts)
 #   playground.sh wp -- <wp-cli args>              run wp-cli against the SAME site + SAME mounts
+#   playground.sh front-page <home-id> [posts-id]  set the static front page (and posts page) so it sticks
 #   playground.sh status                           fast snapshot: bootstrapped? server/port? mounts?
 #   playground.sh stop                             process-group stop + assert nothing survives
 #
@@ -37,6 +38,9 @@ CLI=(npx -y "@wp-playground/cli@${PLAYGROUND_VERSION}")
 WORKDIR=workdir
 PG="$WORKDIR/.playground"
 PHAR="$PG/wp-cli.phar"
+# Absolute path to THIS script, so `ensure` can print a copy-pasteable relaunch line that works
+# from any cwd and survives a temp-dir clone (the /tmp landmine). Resolved once, here.
+SELF="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
 
 die() { echo "playground.sh: $*" >&2; exit 1; }
 
@@ -143,7 +147,7 @@ cmd_ensure() {
   if [ "$#" -gt 0 ]; then want=$(printf '%s\n' "$@"); else want="$have"; fi
   if server_alive && [ "$want" = "$have" ]; then
     echo "reusing server on port $(cat "$PG/server.port")"
-    print_curl_hint; return 0
+    print_curl_hint; print_relaunch_hint; return 0
   fi
   if server_alive; then
     echo "mounts changed — restarting server with the new mount set"
@@ -176,7 +180,7 @@ cmd_ensure() {
     # curl -fs, not -s: Playground serves 502s while booting and plain -s calls that ready
     if curl -fs -o /dev/null --max-time 2 "http://127.0.0.1:$port/"; then
       echo "server ready: http://127.0.0.1:$port (log: $PG/server.log)"
-      print_curl_hint; return 0
+      print_curl_hint; print_relaunch_hint; return 0
     fi
     sleep 2
   done
@@ -190,6 +194,15 @@ print_curl_hint() {
   # Playground sets a session cookie via a one-time 302; cookie-less curl loops on 302→/
   local p; p=$(cat "$PG/server.port")
   echo "frontend check: curl -sL -c $PG/cookies -b $PG/cookies http://127.0.0.1:$p/"
+}
+
+print_relaunch_hint() {
+  # A copy-pasteable, absolute-path command to bring this exact site (same mount set) back up —
+  # so a new session or a stopped server can relaunch without rediscovering the script path or
+  # mounts. Uses $SELF (absolute) so it works from any cwd; replays the recorded mount set.
+  local mounts=""
+  [ -f "$PG/mounts" ] && mounts=$(tr '\n' ' ' < "$PG/mounts")
+  echo "to relaunch: $SELF ensure $mounts"
 }
 
 cmd_wp() {
@@ -208,6 +221,25 @@ cmd_wp() {
     --mount="$PG:/host" \
     ${MOUNTS[@]+"${MOUNTS[@]}"} \
     -- /host/wp-cli.phar "$@"
+}
+
+cmd_front_page() {
+  # Set a static front page (and optional posts page) the way that actually sticks on Playground.
+  # `wp option update show_on_front|page_on_front|page_for_posts` can report "Value is unchanged"
+  # and silently no-op, so routing never takes; update_option via `wp eval` always writes. The IDs
+  # ride inside the eval string, so the "wp verb drops a lone numeric positional" bug doesn't apply.
+  local home="${1:-}" posts="${2:-}"
+  [ -n "$home" ] || die "usage: playground.sh front-page <home-page-id> [posts-page-id]"
+  case "$home" in ''|*[!0-9]*) die "home-page-id must be a numeric post ID (got '$home')";; esac
+  if [ -n "$posts" ]; then
+    case "$posts" in *[!0-9]*) die "posts-page-id must be a numeric post ID (got '$posts')";; esac
+  fi
+  local php="update_option('show_on_front','page'); update_option('page_on_front', $home);"
+  [ -n "$posts" ] && php="$php update_option('page_for_posts', $posts);"
+  cmd_wp -- eval "$php"
+  cmd_wp -- rewrite flush --hard
+  # verify from options (NOT the DB siteurl) and echo the result so the caller sees it took
+  cmd_wp -- eval "echo 'show_on_front=',get_option('show_on_front'),' page_on_front=',get_option('page_on_front'),' page_for_posts=',get_option('page_for_posts'),\"\n\";"
 }
 
 cmd_status() {
@@ -232,8 +264,7 @@ cmd_status() {
   fi
   if server_alive; then
     print_curl_hint
-    local mounts=""; [ -f "$PG/mounts" ] && mounts=$(tr '\n' ' ' < "$PG/mounts")
-    echo "to relaunch:  $(cd "$(dirname "$0")" && pwd)/$(basename "$0") ensure $mounts"
+    print_relaunch_hint
   fi
 }
 
@@ -265,10 +296,11 @@ cmd_stop() {
 }
 
 case "${1:-}" in
-  bootstrap) shift; cmd_bootstrap "$@";;
-  ensure)    shift; cmd_ensure "$@";;
-  wp)        shift; cmd_wp "$@";;
-  status)    shift; cmd_status "$@";;
-  stop)      shift; cmd_stop "$@";;
+  bootstrap)  shift; cmd_bootstrap "$@";;
+  ensure)     shift; cmd_ensure "$@";;
+  wp)         shift; cmd_wp "$@";;
+  front-page) shift; cmd_front_page "$@";;
+  status)     shift; cmd_status "$@";;
+  stop)       shift; cmd_stop "$@";;
   *) sed -n '3,11p' "$0"; exit 1;;
 esac
