@@ -36,9 +36,12 @@ bundled/cached Chromium, then falls back to your system-installed Chrome. Don't 
 26.04) and the gate doesn't need it — a bundled/cached build is usually already present, and a
 failed *install* is not a failed *gate*. Only install a browser if the gate itself reports it
 tried both and found none. It validates every template, part, and **server-rendered pattern**
-against the site's full block registry. It must print `GATE PASS`. Then check rendered
-layout with a screenshot (see `design.md`) — the gate catches invalid blocks, not a hero
-rendering with gutters.
+against the site's full block registry. It must print `GATE PASS`. On any `INVALID`, the gate
+now prints the **canonical markup the editor expects** right beneath the failure line — diff it
+against your file; that diff is the fix (the same answer `canonicalize.mjs` gives, inline, so a
+single gate run usually tells you both *what* is wrong and *what* it should be). Then check
+rendered layout with a screenshot (see `design.md`) — the gate catches invalid blocks, not a
+hero rendering with gutters.
 
 **When a block is `INVALID` (or you want the canonical form), ask the live editor — don't
 hand-balance divs by trial and error:**
