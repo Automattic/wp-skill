@@ -7,6 +7,7 @@
 #   playground.sh ensure   [host:vfs ...]          idempotent: converge to a running server (+ mounts)
 #   playground.sh wp -- <wp-cli args>              run wp-cli against the SAME site + SAME mounts
 #   playground.sh front-page <home-id> [posts-id]  set the static front page (and posts page) so it sticks
+#   playground.sh status                           fast snapshot: bootstrapped? server/port? mounts?
 #   playground.sh stop                             process-group stop + assert nothing survives
 #
 # State (all under workdir/.playground/): site-dir, mounts, server.{pid,pgid,port,log}. The whole
@@ -241,6 +242,32 @@ cmd_front_page() {
   cmd_wp -- eval "echo 'show_on_front=',get_option('show_on_front'),' page_on_front=',get_option('page_on_front'),' page_for_posts=',get_option('page_for_posts'),\"\n\";"
 }
 
+cmd_status() {
+  # Fast "where am I" snapshot from recorded state only — no npx/wp spawn, so it's instant and
+  # safe to run anytime (e.g. at the start of a session to decide whether to bootstrap/ensure).
+  if [ -s "$PG/site-dir" ] && [ -d "$(cat "$PG/site-dir" 2>/dev/null)" ]; then
+    echo "bootstrapped: yes ($(cat "$PG/site-dir"))"
+  else
+    echo "bootstrapped: no — run 'bootstrap' first"
+    return 0
+  fi
+  if server_alive; then
+    echo "server:       running on http://127.0.0.1:$(cat "$PG/server.port") (pid $(cat "$PG/server.pid"))"
+  else
+    echo "server:       not running — run 'ensure' to start it"
+  fi
+  if [ -s "$PG/mounts" ]; then
+    echo "mounts:       (the active theme is whichever of these you ran 'wp theme activate' on)"
+    while IFS= read -r m; do [ -n "$m" ] && echo "  - $m"; done < "$PG/mounts"
+  else
+    echo "mounts:       (none recorded)"
+  fi
+  if server_alive; then
+    print_curl_hint
+    print_relaunch_hint
+  fi
+}
+
 cmd_stop() {
   [ -f "$PG/server.pgid" ] || { echo "no recorded server"; return 0; }
   local port=""; [ -f "$PG/server.port" ] && port=$(cat "$PG/server.port")
@@ -273,6 +300,7 @@ case "${1:-}" in
   ensure)     shift; cmd_ensure "$@";;
   wp)         shift; cmd_wp "$@";;
   front-page) shift; cmd_front_page "$@";;
+  status)     shift; cmd_status "$@";;
   stop)       shift; cmd_stop "$@";;
-  *) sed -n '3,10p' "$0"; exit 1;;
+  *) sed -n '3,11p' "$0"; exit 1;;
 esac
