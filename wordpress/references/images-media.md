@@ -194,6 +194,19 @@ generates, so it's safe to run anytime, logged in or not.
 
 ## Filling the slots: after the editor gate, before "done"
 
+**Order of operations.** Markers are just alt text, so image work *brackets* the gates — never
+generate real images between them:
+
+1. **Write** the `AI_IMAGE:` markers into patterns/templates.
+2. **Pre-flight** the markers — `check --files …` (cheap, no network) — and fix any issues.
+3. **Gate 1** (`validate-blocks.cjs`) then **Gate 2** (`editor-gate.mjs`) on the markup. Use
+   `placeholders --files …` so the layout renders while you iterate.
+4. **Generate** real images (`generate --files …`) only after both gates are green.
+5. **Re-run Gate 2** if generation changed any block markup. `generate` rewrites alts to human
+   text — and for a `core/cover` it rewrites the block-comment `"alt"` too — so the markup the
+   editor sees is different from what gate 2 last approved. Re-running it confirms the rewrite
+   left every block valid (this is exactly where a cover desync would resurface).
+
 Both filling commands run once the theme passes both block gates (the markers don't affect
 validity — they're just alt text):
 
