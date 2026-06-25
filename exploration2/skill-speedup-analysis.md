@@ -169,7 +169,7 @@ structural causes, all now addressed:
    round-trip embedded PHP); validate-blocks + a hand fix cover those rare files.
 
 Remaining speed ideas (not yet done): adopt Telex's `theme:./` asset pseudo-URL + a render-time
-rewrite boilerplate so patterns carry no inline PHP at all (then fix-blocks can process them).
+rewrite boilerplate so patterns carry no inline PHP. (Superseded: fix-blocks now masks inline <?php?> spans with a URL-shaped sentinel, repairs the block, and restores the PHP byte-for-byte — so it auto-repairs covers in PHP patterns directly, no theme:./ change needed.)
 
 **Done:** `editor-gate` is now a single final pass — `block-markup.md` "Final gate" + SKILL rule 3
 frame it as run-once-per-hand-back (landing page, then §6 additions), never a per-file

@@ -119,8 +119,33 @@ function rebuild(block) {
   return createBlock(block.name, block.attributes, inner.length ? inner : undefined);
 }
 
+// Inline PHP (e.g. src="<?php echo esc_url( get_theme_file_uri('assets/x.png') ); ?>" in a cover
+// url/img) can't survive parse()→serialize() — the serializer HTML-escapes `<?php`. So mask every
+// <?php…?> span with an inert alnum sentinel before parsing, then restore the originals after. The
+// sentinel is a valid attribute value (and plain text), so it round-trips through createBlock →
+// serialize unchanged; the cover's save() even carries the url sentinel into the regenerated <img
+// src>. This is what lets fix-blocks repair covers/groups in PHP patterns instead of the agent
+// hand-fixing them via canonicalize.
+// The sentinel must be a value that's VALID wherever the PHP sat — these spans are almost always a
+// cover url / img src, and a cover validates its url, so a non-URL token (e.g. a bare word) makes
+// the cover parse as invalid and produces false "needs hand fix" noise on otherwise-valid covers.
+// A URL-shaped sentinel is treated as a normal image URL and round-trips cleanly.
+function maskPhp(html) {
+  const spans = [];
+  const masked = html.replace(/<\?php[\s\S]*?\?>/g, (m) => {
+    const token = 'https://php-sentinel.invalid/' + spans.length;
+    spans.push(m);
+    return token;
+  });
+  return { masked, spans };
+}
+function unmaskPhp(html, spans) {
+  return html.replace(/https:\/\/php-sentinel\.invalid\/(\d+)/g, (_, i) => spans[+i] ?? _);
+}
+
 function fixMarkup(html) {
-  const pre = fixNestedParagraphs(html);
+  const { masked, spans } = maskPhp(html);
+  const pre = fixNestedParagraphs(masked);
   const parsed = parse(pre);
   const issues = [];
   const collect = (list) => list.forEach((b) => {
@@ -130,6 +155,7 @@ function fixMarkup(html) {
   collect(parsed);
   let out = serialize(parsed.map(rebuild));
   out = fixNestedParagraphs(out);
+  out = unmaskPhp(out, spans);
   return { html: out, changed: out !== html, invalid: [...new Set(issues)] };
 }
 
@@ -152,14 +178,8 @@ function fixFile(path, dry) {
   if (path.endsWith('.php')) {
     const parts = splitPattern(content);
     if (!parts) { console.log(`skip   ${path} — no closing ?> before markup`); return false; }
-    // Embedded PHP in the block markup (e.g. <?php echo esc_url( get_theme_file_uri(...) ); ?> in a
-    // cover url/image src) cannot survive parse()→serialize(): the serializer HTML-escapes the
-    // `<?php` into `<?php`, silently breaking the file. parse() doesn't understand PHP, so we
-    // can't fix these mechanically — skip and let validate-blocks/editor + a hand fix handle them.
-    if (parts.body.includes('<?php')) {
-      console.log(`skip   ${path} — embedded PHP in block markup (can't auto-fix; check with validate-blocks)`);
-      return false;
-    }
+    // Inline <?php…?> in the block markup is masked/restored inside fixMarkup, so covers/groups in
+    // PHP patterns are auto-repaired like any other file.
     result = fixMarkup(parts.body);
     rewrite = parts.header + result.html;
   } else {
@@ -167,13 +187,18 @@ function fixFile(path, dry) {
     rewrite = result.html;
   }
 
-  // Only rewrite files that actually contain an INVALID block. Re-serializing valid markup would
-  // gratuitously migrate it to the pinned @wordpress/blocks canonical form (e.g. textAlign → style,
-  // separator opacity), which can diverge from the live site's WP version and churn good files for
-  // no gain. The editor gate stays the authority for the live site; this fixer targets real errors.
-  if (!result.invalid.length) { console.log(`ok     ${path}`); return false; }
+  // Rewrite ONLY when there's a genuine INVALID block AND re-serialize actually changed the markup.
+  // Everything else is `ok`:
+  //  - no invalid  → don't touch it (re-serializing valid markup would churn it to the pinned
+  //    @wordpress/blocks form — textAlign→style, separator opacity — possibly diverging from the
+  //    live WP; the editor gate is the authority for valid markup).
+  //  - invalid but unchanged → the markup is already createBlock-canonical and fix-blocks can't
+  //    improve it; the pinned "invalid" is unreliable for the live site (the pinned parser lags
+  //    the running WP, so covers/groups the live editor accepts can re-parse invalid here). Report
+  //    ok and let the editor gate decide — never tell the agent to "hand fix"; that loop is what
+  //    this script replaces.
+  if (!result.invalid.length || !result.changed) { console.log(`ok     ${path}`); return false; }
   const tag = ` (was invalid: ${result.invalid.join(', ')})`;
-  if (!result.changed) { console.log(`ok     ${path} — invalid but unchanged by re-serialize (needs hand fix / editor)`); return false; }
   if (dry) { console.log(`WOULD-FIX ${path}${tag}`); return true; }
   try { fs.writeFileSync(path, rewrite); } catch (e) { console.log(`SKIP   ${path} — write failed: ${e.message}`); return false; }
   console.log(`FIXED  ${path}${tag}`);

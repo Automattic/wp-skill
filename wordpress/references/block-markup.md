@@ -25,6 +25,14 @@ element/attribute/CSS-property order, and dropped unknown attributes. Freeform `
 and pattern PHP headers are left untouched. Run it on every file you just wrote or changed — it is
 the answer to "the editor would flag this," without paying for the editor.
 
+**Run it on `patterns/*.php` too — that is where covers live and where the editor gate otherwise
+finds failures.** fix-blocks masks inline `<?php … ?>` (e.g. `get_theme_file_uri()` in a cover
+`url`/`src`) with a sentinel, repairs the block structure, and restores the PHP byte-for-byte — so
+a PHP cover is auto-repaired exactly like an `.html` one. **Do not skip PHP patterns and let the
+editor gate discover their cover/group failures** (then hand-fix via `canonicalize.mjs`) — that
+trial-and-error loop is the slow path this script exists to replace. Glob it all:
+`fix-blocks.cjs <theme>/patterns/*.php <theme>/templates/*.html <theme>/parts/*.html <theme>/content/pages/*.html`.
+
 **2. Confirm what's left:**
 
 ```bash
@@ -39,8 +47,11 @@ Three outcomes:
 - `NORMALIZE` — **warning only.** Deprecated-but-valid form; fix-blocks already rewrites these to
   canonical. Never treat a NORMALIZE warning as a failure.
 
-The inner loop validates against pinned core packages only — plugin blocks, PHP patterns,
-and the site's actual WP version are invisible to it.
+Run `validate-blocks.cjs` on the **`.html`** files (templates/parts/content). On a `.php` pattern
+it lints the `<?php … ?>` header itself as `core/missing` — that's expected and harmless (it
+doesn't strip the header the way fix-blocks does), so don't chase it; patterns are covered by
+fix-blocks (above) plus the editor gate (below). The inner loop validates against pinned core
+packages only — plugin blocks and the site's actual WP version are invisible to it.
 
 **Final gate — ONE pass, after every file for the deliverable is inner-loop-clean:**
 
