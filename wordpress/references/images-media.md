@@ -161,7 +161,23 @@ alt="AI_IMAGE: <description> | <style> | <aspect>"
 
 - **description** — the generation prompt: 1–3 sentences, specific about composition,
   colors, mood. It doubles as the human alt text after generation, so write it to work as
-  both.
+  both. **It must be self-contained.** The model that generates the image sees *only this
+  string* — never the site brief, the page, the caption, the theme, or the other images. Any
+  context that lives outside the alt is invisible at generation time, so bake the specifics
+  *into* the description: the concrete subject and setting (place, era, who/what), not a
+  generic stand-in for it. A caption like "Madre de Plaza de Mayo — 2008" or a site about an
+  Argentine documentary photographer does **not** reach the model — if the image should be a
+  Mother of the Plaza de Mayo in Buenos Aires, the *alt* has to say so.
+  - Too generic (renders as "any vigil / any strike / any old face, anywhere"):
+    `Black-and-white documentary photograph of a candlelight vigil at night, faces softly lit by held candles, intimate and solemn, fine grain`
+  - Self-contained (the subject, place, and era are in the prompt itself):
+    `Black-and-white documentary photograph of a nighttime candlelight vigil in Buenos Aires' Plaza de Mayo, Argentina, mourners holding candles before the Casa Rosada, white headscarves visible in the crowd, intimate and solemn, 35mm fine grain`
+  - Pull the grounding from what you already know about the site — subject, location, period,
+    style — and write it explicitly into every marker. Lean concrete (named place, decade,
+    specific objects/dress/architecture) over abstract mood words; mood alone is what makes a
+    prompt generic. Don't, however, invent identifiable real people or fabricate a documentary
+    record of a specific real event as if it were genuine — ground the *scene*, not a forged
+    photograph.
 - **style** — one of: `photorealistic`, `digital-art`, `illustration`, `minimalist`,
   `flat-design`, `3d-render`, `abstract`, `watercolor`. (There is no style parameter on the
   endpoint; the script folds it into the prompt as "…, <style> style".)
@@ -194,6 +210,13 @@ generates, so it's safe to run anytime, logged in or not.
 
 ## Filling the slots: after the editor gate, before "done"
 
+**The image is built from the code, not before it.** The description, aspect, and style for every
+image are authored by the writer of the markup that uses it, in the `<img>`'s `AI_IMAGE:` alt for
+that exact slot — and `generate --files` generates each image *from that alt*. So generation always
+comes AFTER the pattern/template (or the preview HTML) is written. Never pre-generate images from
+separately-invented prompts before the markup exists: the result won't match the slot's intended
+content/ratio/style. (The same rule binds design previews — see `references/design.md` §2.)
+
 **Order of operations.** Markers are just alt text, so image work *brackets* the gates — never
 generate real images between them:
 
@@ -201,8 +224,16 @@ generate real images between them:
 2. **Pre-flight** the markers — `check --files …` (cheap, no network) — and fix any issues.
 3. **Gate 1** (`validate-blocks.cjs`) then **Gate 2** (`editor-gate.mjs`) on the markup. Use
    `placeholders --files …` so the layout renders while you iterate.
-4. **Generate** real images (`generate --files …`) only after both gates are green.
-5. **Re-run Gate 2** if generation changed any block markup. `generate` rewrites alts to human
+4. **Generate** real images (`generate --files …`) only after both gates are green. **Pass a glob
+   of EVERY marker-bearing file, not a hand-picked subset** — `<theme>/patterns/*.php
+   <theme>/templates/*.html <theme>/content/pages/*.html`. A marker-bearing file you forget to pass
+   is never generated and ships as a gray placeholder (the most common cause of "one image is still
+   a placeholder" — a single missed `patterns/story.php`).
+5. **Verify no marker was missed.** After generating, `grep -rl "AI_IMAGE" <theme>/patterns
+   <theme>/templates <theme>/content` must come back **empty** (generation rewrites every alt it
+   fills to human text, so a remaining `AI_IMAGE:` = an ungenerated slot still showing a
+   placeholder). If anything is left, you skipped that file in step 4 — generate it.
+6. **Re-run Gate 2** if generation changed any block markup. `generate` rewrites alts to human
    text — and for a `core/cover` it rewrites the block-comment `"alt"` too — so the markup the
    editor sees is different from what gate 2 last approved. Re-running it confirms the rewrite
    left every block valid (this is exactly where a cover desync would resurface).

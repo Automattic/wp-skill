@@ -22,6 +22,12 @@ The single-direction path **is** the previews workflow below — image handling 
 first-fold HTML, serve over HTTP, show in the browser, carry the choice forward as the contract
 — just with one option instead of four. Everything else in this file applies unchanged.
 
+**If the user pointed at a reference website** (inspiration, "build a site for X.com", "rebuild
+my site at…", "unlike Y.com"), capture it and write its brief first — `references/inspiration.md`.
+The reference's palette, layout archetype, and section rhythm feed both the directions below and
+the page composition, and make the brief "specific" (so honor it across all 4 directions rather
+than diverging wildly).
+
 **First, resolve image handling** (`references/images-media.md`): ask the user — always, even
 when already logged in — how to handle imagery, presenting the four options (generate AI photos
 first, then plain placeholders, provide their own, or imageless). The answer changes what the
@@ -56,14 +62,21 @@ For each direction, generate one complete, self-contained HTML document:
   theme ever will.
 - Hero imagery follows the image-handling choice (resolved above, recorded in
   `workdir/.playground/images.json` — see `references/images-media.md`):
-  - **`yes`** (generate AI): generate a real hero image for *each* direction and use it — a
-    preview that says "yes to images" but renders a CSS gradient misrepresents the design. Derive
-    a prompt from the direction's hero composition + mood and write it into that option's preview
-    dir, e.g. `node <skill-dir>/scripts/wpcom-images.mjs generate --prompt "<hero composition>, <style> style" --aspect 16:9 --out workdir/previews/option-N/hero.png`, then reference it with a
-    relative `<img src="hero.png">` (the gallery is served over HTTP, so relative paths resolve).
-    This is ~4 generations (one per direction), counts against quota, and the chosen direction's
-    hero can be reused. If a generation fails or the endpoint is unavailable, fall back to a
-    placeholder block (next case) for that one preview rather than shipping a gray box.
+  - **`yes`** (generate AI): a preview that says "yes to images" but renders a CSS gradient
+    misrepresents the design. **Write the preview HTML FIRST**, with the hero `<img>` carrying the
+    image prompt in its alt — the HTML is the source of truth for what gets generated:
+    `<img id="hero-image" src="hero.png" alt="AI_IMAGE: <description grounded in this direction's
+    hero composition + mood> | <style> | <aspect>">` (relative `src` — the gallery is served over
+    HTTP). The description must be **self-contained** — the model sees only the alt string, not
+    the brief or the page, so bake the concrete subject/place/era into it (the
+    `references/images-media.md` marker contract has the rule and a before/after); a generic
+    description is the usual cause of a generic, off-topic image. **Then generate from that alt**, reading the description / style / aspect you just wrote
+    (not a separately-invented prompt):
+    `node <skill-dir>/scripts/wpcom-images.mjs generate --prompt "<description>, <style> style" --aspect <aspect> --out workdir/previews/option-N/hero.png`.
+    Generating before the HTML exists means the image isn't built from the alt — write, then
+    generate. This is ~4 generations (one per direction), counts against quota, and the chosen
+    direction's hero can be reused. If a generation fails or the endpoint is unavailable, fall back
+    to a placeholder block (next case) for that one preview rather than shipping a gray box.
   - **`placeholders`** (the default): show a plain solid-color block at the hero's aspect ratio
     (a CSS block tinted from the direction's palette is fine — no need to write a PNG for the
     throwaway preview), clearly reading as "photo goes here". The layout, proportions, and
@@ -78,31 +91,23 @@ For each direction, generate one complete, self-contained HTML document:
 
 ### 3. Present a 2×2 gallery in the browser
 
-Write everything to `workdir/previews/` in the project (clear it first if a prior redesign
-left option dirs there): `directions.json`, `option-1/preview.html` … `option-4/preview.html`,
-and `index.html` — a 2×2 grid of `<iframe>`s, each labeled with its option number and title.
-(**Single-direction path:** write the one `option-1/preview.html` and serve it directly — same
-HTTP-serve rule below; show that single preview full-cell instead of a 2×2 grid.)
-(`workdir/` is the project's gitignored scratch area — persistent across reboots, so generated
-preview images aren't silently wiped from `/tmp` and don't have to be re-generated.)
+Write to `workdir/previews/` in the project (clear it first if a prior redesign left option dirs
+there): `directions.json` and `option-1/preview.html` … `option-4/preview.html`. (`workdir/` is the
+project's gitignored scratch area — persistent across reboots, so generated preview images aren't
+silently wiped from `/tmp` and don't have to be re-generated.)
 
-**Each preview must fill its cell exactly — no dead whitespace beside or below it.** Render
-every iframe at a real desktop viewport (1280×800) and scale it to fit with a *measured*
-transform — never a hardcoded factor like `scale(0.5)`, which only fits one monitor width.
-Give the cell the same aspect ratio so width-fitting fills both dimensions. (The
-no-JavaScript rule binds the previews, not this shell.) Use this pattern in `index.html`:
+**Don't hand-write the gallery `index.html` — copy the shipped shell:**
 
-```html
-<style>
-  .cell { position: relative; aspect-ratio: 1280 / 800; overflow: hidden; }
-  .cell iframe { position: absolute; width: 1280px; height: 800px; border: 0; transform-origin: 0 0; }
-</style>
-<script>
-  const fit = () => document.querySelectorAll('.cell iframe').forEach(f =>
-    f.style.transform = `scale(${f.parentElement.clientWidth / 1280})`);
-  addEventListener('load', fit); addEventListener('resize', fit);
-</script>
+```bash
+cp <skill-dir>/boilerplate/preview-gallery.html workdir/previews/index.html
 ```
+
+It is data-driven: it reads `directions.json` and builds a labeled cell per direction with an
+`<iframe src="option-N/preview.html">`, each rendered at a real 1280×800 desktop viewport and
+scaled to fit its cell with a **measured** transform (`clientWidth / 1280`) so it fills the cell
+exactly on any monitor — no dead whitespace, no hardcoded `scale()`. It handles both paths
+automatically: one direction → a single full-width cell, four → a 2×2 grid. So the only files you
+author for the gallery are `directions.json` + the `option-N/preview.html` previews.
 
 **Serve the gallery over a local HTTP server — never hand the user a `file://` path.** The
 `index.html` loads each preview through a relative `<iframe src>`, and a sandboxed browser
@@ -141,6 +146,68 @@ them before a temp dir vanishes), so just note which option won — keep the who
 for reference. The finished theme's first fold must be recognizably descended from the selected
 preview; the rest of the site extends its visual language.
 
+### 5. Build the LANDING PAGE first — not the whole site
+
+**Ship the landing page, then stop.** The slowest, most disappointing builds compose every page,
+template, CPT, and image up front on the assumption the user wants the whole site — most of that
+work is unseen while the user waits. Build only the landing page (the home/front page + the chrome
+it needs), get it running, show the user, and **then** ask what else to build (§6). For a
+`landing-page` layoutMode the landing IS the site; for everything else it's the home page.
+
+Do these in order, then hand back the live landing page:
+
+0. **Scaffold the theme** — `scripts/scaffold-theme.sh <theme-dir> "<Theme Name>"`. One command
+   drops the boilerplate you'd otherwise hand-write and frequently get wrong: `theme.json` with all
+   the rigor already wired (root padding, `useRootPaddingAwareAlignments`, every flex/grid
+   `blockGap` default, paired button/link colors), `style.css` (theme header + base utilities) that
+   `functions.php` already enqueues on the front end **and** the editor, the motion runtime
+   (frontend-only) + a fonts hook, and `content-loader.php`. Steps 2 and 5 become *fill in the
+   blanks*, not *write from scratch*.
+1. **Write the site spec** — `references/site-spec.md`. Derive `workdir/.playground/site-spec.json`
+   (`layoutMode`, `headerBehavior`, `contentMode`, `heroComposition`, typography). Every file
+   branches on it.
+2. **Make the scaffolded theme.json the design's** — `references/themes-and-patterns.md`. Recolor
+   the 8 palette slugs to the direction (keep the slug names), swap the two font families (not
+   Inter/Roboto/Arial), tune `contentSize`/`wideSize`/`blockGap`. The rigor is already there —
+   verify WCAG-AA contrast on your new colors; don't re-derive the structure.
+3. **Page-frame CSS for the layoutMode** — if `layoutMode` isn't `vertical-stack`, follow
+   `references/layout-modes.md` for the shell + sticky/overlay header contract.
+4. **Compose the landing page only** — `references/aesthetics.md`. Write `parts/header.html`,
+   `parts/footer.html`, `templates/front-page.html` (+ `templates/index.html` as the fallback), and
+   `content/pages/home.html` — the centerpiece, ≥3 unique sections committed to the aesthetic.
+   `content-loader.php` self-registers `home` and promotes it to the static front page (do NOT
+   hand-roll `wp_insert_post`, a temp setup PHP, or `playground.sh front-page`). **Do NOT write the
+   other pages (menu/about/contact…), their templates, CPTs, or forms yet** — that's §6.
+5. **Add motion** — `references/motion.md`. The runtime is already enqueued; add the class hooks:
+   section reveal is always-on; pick 1–2 richer homepage effects within the budget.
+6. **Generate the landing's images LAST — from the markup, never before it.** Every image is
+   authored as an `AI_IMAGE:` alt on its `<img>` by the code that uses it (the writer chose the
+   description, aspect, and style for that exact slot — `references/images-media.md`). Only after
+   the markup exists do you fill those slots: `wpcom-images.mjs generate --files <glob of EVERY
+   landing pattern + template>` reads each alt and generates the matching image. **Pass a glob, not
+   a hand-picked list** — a forgotten marker-bearing file ships a gray placeholder. Then verify:
+   `grep -rl AI_IMAGE` over the landing files must be empty. Generating up front from invented
+   prompts (before the patterns exist) defeats this — the image won't match the slot. Generate only
+   the landing's slots now, not the whole site's library.
+
+Then run the gates **once** over just these files (fix-blocks → validate-blocks → editor-gate; the
+image step above brackets the gates per `references/images-media.md` — markers in, generate after),
+screenshot the landing (desktop + mobile), and hand it back **live** with the URL.
+
+(On the skip path — user declined the gallery — still build the landing page from the single
+direction you chose, then §6.)
+
+### 6. Then ask what else to build — scoped to the site type
+
+Once the landing page is running and the user has seen it, **stop and ask in chat** what to build
+next — don't assume. Offer the specific candidates this site implies, e.g. for a restaurant: the
+**Menu**, **Our Story**, and **Visit/Reserve** pages; a **reservation form** (CPT + REST per the
+data-persistence pattern); the `page.html`/`single.html`/`archive.html` templates those need. For a
+blog: the post templates + sample posts. For a portfolio: a projects CPT + archive. Build only what
+the user confirms, reuse the established design language (same scaffold, palette, patterns), and
+re-run the gates on the new files. Each added page is `content/pages/<slug>.html`; the loader picks
+it up automatically. This keeps the first hand-back fast and lets the user steer scope.
+
 ## Verify and polish from evidence, not pixels
 
 The rendered page often differs from the markup you wrote (WordPress injects layout classes
@@ -162,7 +229,10 @@ and owns spacing). Diagnose from the rendered DOM, then fix in one batch:
    node <skill-dir>/scripts/checker/visual-gate.mjs "$URL" --paths /,/journal/,/about/ --viewports desktop,mobile
    ```
    It writes `visual-<page>-<viewport>.png` for each page and exits non-zero if any page 404s or
-   renders blank. Always do the mobile pass, not just desktop.
+   renders blank. Always do the mobile pass, not just desktop. Both tools emulate
+   `prefers-reduced-motion: reduce`, so `reveal-on-scroll` sections capture at full opacity — a
+   full-page shot shows the real content, not blank pre-reveal bands. Don't chase a "blank" section
+   that's only mid-reveal; the capture already accounts for motion.
 2. **Diagnose every section before fixing anything.** For each issue the screenshots show,
    inspect the live DOM and computed styles (Playwright `page.evaluate` with
    `getComputedStyle`, bounding boxes vs viewport width) to find the actual cause — the

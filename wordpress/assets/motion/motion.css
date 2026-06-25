@@ -1,0 +1,102 @@
+/*
+ * Scroll motion catalog — frontend-only stylesheet for skill-built block themes.
+ *
+ * Drives the class / data-attribute hooks the theme's block markup opts into:
+ *   .reveal-on-scroll  .hero-content  .scroll-progress  .narrative-pin
+ *   body.header-hidden (hide-on-scroll header)  .wp-block-navigation a.is-active
+ *
+ * Every rule is wrapped in @media (prefers-reduced-motion: no-preference), so
+ * users who opted out of motion get the static layout with nothing hidden.
+ *
+ * MUST be enqueued frontend-only (wp_enqueue_scripts), NOT via add_editor_style.
+ * If `.reveal-on-scroll { opacity: 0 }` reached the block-editor iframe, every
+ * reveal section would render blank and the editor canvas would read as empty.
+ * Keeping it out of style.css is what keeps it out of the editor.
+ */
+
+@media (prefers-reduced-motion: no-preference) {
+    /* A. Section reveal on enter view — paired with motion.js (IntersectionObserver). */
+    .reveal-on-scroll {
+        opacity: 0;
+        transform: translateY(24px);
+        transition: opacity 0.7s ease, transform 0.7s ease;
+    }
+    .reveal-on-scroll.is-visible {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    /* B. Hero scroll-fade — CSS-only, keyed to root page scroll so first-screen
+       hero copy starts fully opaque. Older browsers (no scroll-driven animations)
+       fall back to a static hero, which is acceptable. */
+    @supports (animation-timeline: scroll()) {
+        .hero-content {
+            opacity: 1;
+            transform: translateY(0);
+            animation: motion-hero-fade linear both;
+            animation-timeline: scroll(root);
+            animation-range: 0px 60vh;
+        }
+        @keyframes motion-hero-fade {
+            from { opacity: 1; transform: translateY(0); }
+            to   { opacity: 0; transform: translateY(-40px); }
+        }
+    }
+
+    /* C. Scroll progress bar — CSS-only; older browsers leave the bar at scaleX(0). */
+    @supports (animation-timeline: scroll()) {
+        .scroll-progress {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--wp--preset--color--accent, currentColor);
+            transform-origin: left center;
+            transform: scaleX(0);
+            z-index: 1000;
+            pointer-events: none;
+            animation: motion-progress-grow linear;
+            animation-timeline: scroll(root);
+        }
+        @keyframes motion-progress-grow {
+            from { transform: scaleX(0); }
+            to   { transform: scaleX(1); }
+        }
+    }
+
+    /* D. Sticky narrative pin — first column pins while the second scrolls past. */
+    .narrative-pin > .wp-block-column:first-child {
+        position: sticky;
+        top: var(--wp--custom--scroll-padding-top, 96px);
+        align-self: flex-start;
+    }
+
+    /* Header hide-on-scroll-down (motion.js toggles body.header-hidden). */
+    .wp-site-blocks > header.wp-block-template-part {
+        transition: transform 0.3s ease;
+    }
+    body.header-hidden .wp-site-blocks > header.wp-block-template-part {
+        transform: translateY(-100%);
+    }
+
+    /* Active-anchor underline (landing-page nav; motion.js toggles .is-active). */
+    .wp-block-navigation a {
+        position: relative;
+    }
+    .wp-block-navigation a::after {
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: -4px;
+        height: 2px;
+        background: currentColor;
+        transform: scaleX(0);
+        transform-origin: left center;
+        transition: transform 0.3s ease;
+    }
+    .wp-block-navigation a.is-active::after {
+        transform: scaleX(1);
+    }
+}

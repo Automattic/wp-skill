@@ -22,6 +22,11 @@ Run `scripts/playground.sh` from the project directory (its state lives in `./wo
 | Write or edit ANY block markup (templates, parts, patterns, post content) | `references/block-markup.md` |
 | Build a theme: structure, theme.json, fonts, patterns, navigation, query loops | `references/themes-and-patterns.md` |
 | New site / redesign (browser design previews + selection); polish rendered output | `references/design.md` |
+| User points at a reference website (inspiration, "build for", rebuild, "unlike X") | `references/inspiration.md` |
+| Decide the site's page-frame shape + header behavior before building (site spec) | `references/site-spec.md` |
+| Build the page-frame CSS for a non-default layoutMode (sidebar, landing, magazine, gallery) | `references/layout-modes.md` |
+| Make a theme look designed, not generated: aesthetic direction + per-page composition | `references/aesthetics.md` |
+| Add tasteful scroll motion to a built theme (reveal, hero-fade, sticky header) | `references/motion.md` |
 | Images for a site: generate (AI via the user's WordPress.com login), add, or remove | `references/images-media.md` |
 | Anything destructive on a site the user calls production | `references/backups-and-safety.md` |
 
@@ -34,9 +39,13 @@ Run `scripts/playground.sh` from the project directory (its state lives in `./wo
    write to a user-designated production site, create and verify a backup manifest
    (`references/backups-and-safety.md`). If the user says to skip it, refuse — creating one
    takes ~30 seconds. File copies count as writes.
-3. **Block work isn't done until both gates pass:** `validate-blocks.cjs` on the files,
-   `editor-gate.mjs` against the live site. Invalid blocks render fine on the frontend and
-   break only in the editor — screenshots can't catch them.
+3. **Block work isn't done until both gates pass.** Per file, as you write/edit markup: auto-repair
+   with `fix-blocks.cjs` (mechanical, no browser; fixes the recurring cover/border/order INVALID
+   cases), then `validate-blocks.cjs` — both instant. Run the slow `editor-gate.mjs` (live editor)
+   **once per hand-back, at the very end**, after every file is inner-loop-clean — not per file and
+   not as a fix-discovery loop; it should pass first try. Do not hand-fix validity or open the
+   editor to fix it; run the fixer. Invalid blocks render fine on the frontend and break only in the
+   editor — screenshots can't catch them. (`references/block-markup.md`.)
 4. **Never edit WordPress core.** `wp search-replace` always dry-runs first.
 5. **Leave the server running when you hand work back — the user needs it live to test.**
    Do NOT run `playground.sh stop` just because development is "done"; stopping a site the
@@ -57,7 +66,17 @@ Run `scripts/playground.sh` from the project directory (its state lives in `./wo
    to that brief (still shown and approved in the browser — not silently skipped). Build what the
    user asked for; previews confirm the execution, they don't reopen a decision the brief already
    made.
-8. **Image handling needs an explicit choice — always ask, before design previews and any
+8. **Build the LANDING PAGE first, then ask what else to build** (`references/design.md` §5–§6).
+   Run the build sequence — **scaffold** (`scripts/scaffold-theme.sh` — drops theme.json rigor,
+   base CSS, motion runtime, content-loader) → site spec (`site-spec.md`) → recolor theme.json
+   (`themes-and-patterns.md`) → page-frame CSS (`layout-modes.md`) → compose the home/front page
+   only (`aesthetics.md`) → motion hooks (`motion.md`) — then hand back the **live landing page**
+   and STOP. Do not pre-build the other pages, templates, CPTs, or forms, or generate the whole
+   image library, on the assumption the user wants them — that's the slow path. Once the user has
+   seen the landing page, ask which of the site-type-appropriate extras to build (§6). Scaffold
+   first so rigor/motion can't be skipped; never hand-write theme.json/style.css boilerplate or
+   hand-roll page creation / front-page wiring (`content-loader.php` does it).
+9. **Image handling needs an explicit choice — always ask, before design previews and any
    markup. Being logged in is not consent.** Check `workdir/.playground/images.json` first (a recorded
    answer is the only thing that skips the question), then follow `references/images-media.md`:
    present four options, **"generate real AI photos" always listed first**, then plain

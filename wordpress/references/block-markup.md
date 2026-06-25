@@ -7,46 +7,83 @@ check never sees. So validation is two gates, and the editor gate is the authori
 
 ## The two-gate loop
 
-**Inner loop — after writing any template/part markup, before declaring it done:**
+**Inner loop — after writing OR editing any template / part / pattern / content markup, before
+declaring it done. Two steps: auto-repair, then confirm.** (One-time setup in `scripts/checker/`:
+`npm install`.)
+
+**1. Auto-repair first — don't hand-fix validity, and don't open the editor to fix it:**
+
+```bash
+node scripts/checker/fix-blocks.cjs <files...>      # add --dry to preview
+```
+
+This re-creates every named block from its parsed attributes (`createBlock` → `serialize`),
+regenerating the exact markup WordPress `save()` produces. It fixes the recurring INVALID cases
+mechanically, in milliseconds, with **no browser and no live site**: cover `<img>`/`<span>` order
++ `has-background-dim` class + required `alt=""`, border-shorthand classes (`has-border-color`),
+element/attribute/CSS-property order, and dropped unknown attributes. Freeform `wp:html` blocks
+and pattern PHP headers are left untouched. Run it on every file you just wrote or changed — it is
+the answer to "the editor would flag this," without paying for the editor.
+
+**Run it on `patterns/*.php` too — that is where covers live and where the editor gate otherwise
+finds failures.** fix-blocks masks inline `<?php … ?>` (e.g. `get_theme_file_uri()` in a cover
+`url`/`src`) with a sentinel, repairs the block structure, and restores the PHP byte-for-byte — so
+a PHP cover is auto-repaired exactly like an `.html` one. **Do not skip PHP patterns and let the
+editor gate discover their cover/group failures** (then hand-fix via `canonicalize.mjs`) — that
+trial-and-error loop is the slow path this script exists to replace. Glob it all:
+`fix-blocks.cjs <theme>/patterns/*.php <theme>/templates/*.html <theme>/parts/*.html <theme>/content/pages/*.html`.
+
+**2. Confirm what's left:**
 
 ```bash
 node scripts/checker/validate-blocks.cjs <files...>
 ```
 
-(One-time setup in `scripts/checker/`: `npm install`.) Three outcomes:
+Three outcomes:
 
-- `INVALID` — fix it. The markup doesn't match what the block's save function produces.
+- `INVALID` — fix-blocks couldn't auto-repair it (rare: genuinely malformed nesting parse() can't
+  recover, or a non-core block). This is the only case that needs hand work or the editor below.
 - `LINT` — fix it (`core/missing`, `core/freeform`, raw `<style>` tags, unknown block types).
-- `NORMALIZE` — **warning only.** The markup parses valid but is a deprecated form. Do NOT
-  "fix" it by hand-editing the HTML; if you want canonical markup, regenerate the block from
-  its attributes — or run `validate-blocks.cjs --fix <files>` to rewrite NORMALIZE-only files to
-  `serialize(parse())` automatically (it never touches INVALID/LINT files). Never treat a
-  NORMALIZE warning as a failure.
+- `NORMALIZE` — **warning only.** Deprecated-but-valid form; fix-blocks already rewrites these to
+  canonical. Never treat a NORMALIZE warning as a failure.
 
-The inner loop validates against pinned core packages only — plugin blocks, PHP patterns,
-and the site's actual WP version are invisible to it.
+Run `validate-blocks.cjs` on the **`.html`** files (templates/parts/content). On a `.php` pattern
+it lints the `<?php … ?>` header itself as `core/missing` — that's expected and harmless (it
+doesn't strip the header the way fix-blocks does), so don't chase it; patterns are covered by
+fix-blocks (above) plus the editor gate (below). The inner loop validates against pinned core
+packages only — plugin blocks and the site's actual WP version are invisible to it.
 
-**Final gate — before declaring any block work finished:**
+**Final gate — ONE pass, after every file for the deliverable is inner-loop-clean:**
 
 ```bash
 node scripts/checker/editor-gate.mjs <site-url> <theme-dir>
 ```
 
-This opens the live site's editor (Playwright). **Just run it** — it auto-uses Playwright's
+Run editor-gate **exactly once per hand-back** — once for the landing page (`design.md` §5), once
+for any later additions (§6). It is slow (it launches Chromium and loads the live editor), so it is
+**not** an inner-loop step and **not** a fix-discovery loop: the inner loop above (fix-blocks +
+validate-blocks, both instant and free) is where you find and fix validity, and with fix-blocks
+auto-repairing the recurring cover/border/order cases it should print `GATE PASS` on the first try.
+Before running it, make sure every template/part/pattern has been through the inner loop.
+
+It opens the live site's editor (Playwright). **Just run it** — it auto-uses Playwright's
 bundled/cached Chromium, then falls back to your system-installed Chrome. Don't pre-run
 `npx playwright install chromium`: that download is unsupported on some newer OSes (e.g. Ubuntu
 26.04) and the gate doesn't need it — a bundled/cached build is usually already present, and a
 failed *install* is not a failed *gate*. Only install a browser if the gate itself reports it
 tried both and found none. It validates every template, part, and **server-rendered pattern**
-against the site's full block registry. It must print `GATE PASS`. On any `INVALID`, the gate
-now prints the **canonical markup the editor expects** right beneath the failure line — diff it
-against your file; that diff is the fix (the same answer `canonicalize.mjs` gives, inline, so a
-single gate run usually tells you both *what* is wrong and *what* it should be). Then check
-rendered layout with a screenshot (see `design.md`) — the gate catches invalid blocks, not a
-hero rendering with gutters.
+against the site's full block registry. It must print `GATE PASS`.
 
-**When a block is `INVALID` (or you want the canonical form), ask the live editor — don't
-hand-balance divs by trial and error:**
+**If it reports `INVALID`,** that means a file skipped the inner loop. The gate prints the
+**canonical markup the editor expects** beneath the failure line — but rather than hand-diffing,
+run `fix-blocks.cjs` then `validate-blocks.cjs` on the *named* file, fix anything they still flag,
+and re-run the gate **once**. Don't iterate the editor gate to chip away at failures one at a time
+— that is the slow path the inner loop exists to prevent. Then check rendered layout with a
+screenshot (see `design.md`) — the gate catches invalid blocks, not a hero rendering with gutters.
+
+**Only if `validate-blocks.cjs` still reports `INVALID` after `fix-blocks.cjs` (rare)** — the
+block is beyond mechanical repair. Ask the live editor for the canonical form rather than
+hand-balancing divs by trial and error:
 
 ```bash
 node scripts/checker/canonicalize.mjs <site-url> patterns/hero.php            # canonicalize a file (or "-" for stdin)
