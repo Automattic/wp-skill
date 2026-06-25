@@ -161,7 +161,23 @@ alt="AI_IMAGE: <description> | <style> | <aspect>"
 
 - **description** — the generation prompt: 1–3 sentences, specific about composition,
   colors, mood. It doubles as the human alt text after generation, so write it to work as
-  both.
+  both. **It must be self-contained.** The model that generates the image sees *only this
+  string* — never the site brief, the page, the caption, the theme, or the other images. Any
+  context that lives outside the alt is invisible at generation time, so bake the specifics
+  *into* the description: the concrete subject and setting (place, era, who/what), not a
+  generic stand-in for it. A caption like "Madre de Plaza de Mayo — 2008" or a site about an
+  Argentine documentary photographer does **not** reach the model — if the image should be a
+  Mother of the Plaza de Mayo in Buenos Aires, the *alt* has to say so.
+  - Too generic (renders as "any vigil / any strike / any old face, anywhere"):
+    `Black-and-white documentary photograph of a candlelight vigil at night, faces softly lit by held candles, intimate and solemn, fine grain`
+  - Self-contained (the subject, place, and era are in the prompt itself):
+    `Black-and-white documentary photograph of a nighttime candlelight vigil in Buenos Aires' Plaza de Mayo, Argentina, mourners holding candles before the Casa Rosada, white headscarves visible in the crowd, intimate and solemn, 35mm fine grain`
+  - Pull the grounding from what you already know about the site — subject, location, period,
+    style — and write it explicitly into every marker. Lean concrete (named place, decade,
+    specific objects/dress/architecture) over abstract mood words; mood alone is what makes a
+    prompt generic. Don't, however, invent identifiable real people or fabricate a documentary
+    record of a specific real event as if it were genuine — ground the *scene*, not a forged
+    photograph.
 - **style** — one of: `photorealistic`, `digital-art`, `illustration`, `minimalist`,
   `flat-design`, `3d-render`, `abstract`, `watercolor`. (There is no style parameter on the
   endpoint; the script folds it into the prompt as "…, <style> style".)

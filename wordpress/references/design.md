@@ -67,7 +67,10 @@ For each direction, generate one complete, self-contained HTML document:
     image prompt in its alt — the HTML is the source of truth for what gets generated:
     `<img id="hero-image" src="hero.png" alt="AI_IMAGE: <description grounded in this direction's
     hero composition + mood> | <style> | <aspect>">` (relative `src` — the gallery is served over
-    HTTP). **Then generate from that alt**, reading the description / style / aspect you just wrote
+    HTTP). The description must be **self-contained** — the model sees only the alt string, not
+    the brief or the page, so bake the concrete subject/place/era into it (the
+    `references/images-media.md` marker contract has the rule and a before/after); a generic
+    description is the usual cause of a generic, off-topic image. **Then generate from that alt**, reading the description / style / aspect you just wrote
     (not a separately-invented prompt):
     `node <skill-dir>/scripts/wpcom-images.mjs generate --prompt "<description>, <style> style" --aspect <aspect> --out workdir/previews/option-N/hero.png`.
     Generating before the HTML exists means the image isn't built from the alt — write, then
