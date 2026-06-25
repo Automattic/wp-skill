@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pick a design direction</title>
+<!--
+  Design-preview gallery shell — copy this to workdir/previews/index.html as-is.
+
+  It is data-driven: it reads ./directions.json and builds a labeled cell per direction with an
+  <iframe src="option-N/preview.html">. One direction -> a single full-width cell; several -> a
+  2-up grid (2x2 for four). Each iframe renders at a real 1280x800 desktop viewport and is scaled
+  to fit its cell with a MEASURED transform (clientWidth / 1280) so it fills the cell exactly on
+  any monitor — no dead whitespace, no hardcoded scale(). Do not hand-write this shell per build;
+  just write directions.json + the option-N/preview.html files and serve this over HTTP.
+-->
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: #0f0f10; color: #eee; }
+  header { position: sticky; top: 0; z-index: 2; padding: 14px 20px; background: #0f0f10; border-bottom: 1px solid #2a2a2c; }
+  header h1 { margin: 0; font-size: 15px; font-weight: 600; }
+  header p { margin: 4px 0 0; font-size: 13px; color: #9a9a9e; }
+  .grid { display: grid; gap: 16px; padding: 16px; grid-template-columns: repeat(2, 1fr); }
+  .grid.single { grid-template-columns: 1fr; max-width: 1280px; margin: 0 auto; }
+  .cell { position: relative; aspect-ratio: 1280 / 800; overflow: hidden; background: #fff; border: 1px solid #2a2a2c; border-radius: 8px; }
+  .cell iframe { position: absolute; top: 0; left: 0; width: 1280px; height: 800px; border: 0; transform-origin: 0 0; pointer-events: none; }
+  .tag { position: absolute; top: 10px; left: 10px; z-index: 1; padding: 5px 10px; border-radius: 999px; background: rgba(15, 15, 16, 0.85); color: #fff; font-size: 12px; font-weight: 600; }
+  .err { padding: 24px; color: #f88; font-size: 14px; }
+  @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Pick a design direction</h1>
+  <p>Tell me the number you'd like to build on — or say "none".</p>
+</header>
+<div id="grid" class="grid"></div>
+<script>
+  (async function () {
+    var grid = document.getElementById('grid');
+    var dirs;
+    try {
+      dirs = await (await fetch('directions.json', { cache: 'no-store' })).json();
+    } catch (e) {
+      grid.outerHTML = '<div class="err">Could not load directions.json — ' + e + '</div>';
+      return;
+    }
+    var list = Array.isArray(dirs) ? dirs : (dirs && dirs.directions) || [];
+    if (!list.length) { grid.outerHTML = '<div class="err">directions.json has no directions.</div>'; return; }
+    if (list.length <= 1) grid.classList.add('single');
+
+    list.forEach(function (d, i) {
+      var n = i + 1;
+      var cell = document.createElement('div');
+      cell.className = 'cell';
+      var tag = document.createElement('div');
+      tag.className = 'tag';
+      tag.textContent = n + '. ' + ((d && d.title) || ('Option ' + n));
+      var frame = document.createElement('iframe');
+      frame.src = 'option-' + n + '/preview.html';
+      cell.appendChild(tag);
+      cell.appendChild(frame);
+      grid.appendChild(cell);
+    });
+
+    var fit = function () {
+      document.querySelectorAll('.cell iframe').forEach(function (f) {
+        f.style.transform = 'scale(' + (f.parentElement.clientWidth / 1280) + ')';
+      });
+    };
+    addEventListener('resize', fit);
+    addEventListener('load', fit);
+    requestAnimationFrame(function () { requestAnimationFrame(fit); });
+  })();
+</script>
+</body>
+</html>

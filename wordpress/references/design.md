@@ -84,31 +84,23 @@ For each direction, generate one complete, self-contained HTML document:
 
 ### 3. Present a 2×2 gallery in the browser
 
-Write everything to `workdir/previews/` in the project (clear it first if a prior redesign
-left option dirs there): `directions.json`, `option-1/preview.html` … `option-4/preview.html`,
-and `index.html` — a 2×2 grid of `<iframe>`s, each labeled with its option number and title.
-(**Single-direction path:** write the one `option-1/preview.html` and serve it directly — same
-HTTP-serve rule below; show that single preview full-cell instead of a 2×2 grid.)
-(`workdir/` is the project's gitignored scratch area — persistent across reboots, so generated
-preview images aren't silently wiped from `/tmp` and don't have to be re-generated.)
+Write to `workdir/previews/` in the project (clear it first if a prior redesign left option dirs
+there): `directions.json` and `option-1/preview.html` … `option-4/preview.html`. (`workdir/` is the
+project's gitignored scratch area — persistent across reboots, so generated preview images aren't
+silently wiped from `/tmp` and don't have to be re-generated.)
 
-**Each preview must fill its cell exactly — no dead whitespace beside or below it.** Render
-every iframe at a real desktop viewport (1280×800) and scale it to fit with a *measured*
-transform — never a hardcoded factor like `scale(0.5)`, which only fits one monitor width.
-Give the cell the same aspect ratio so width-fitting fills both dimensions. (The
-no-JavaScript rule binds the previews, not this shell.) Use this pattern in `index.html`:
+**Don't hand-write the gallery `index.html` — copy the shipped shell:**
 
-```html
-<style>
-  .cell { position: relative; aspect-ratio: 1280 / 800; overflow: hidden; }
-  .cell iframe { position: absolute; width: 1280px; height: 800px; border: 0; transform-origin: 0 0; }
-</style>
-<script>
-  const fit = () => document.querySelectorAll('.cell iframe').forEach(f =>
-    f.style.transform = `scale(${f.parentElement.clientWidth / 1280})`);
-  addEventListener('load', fit); addEventListener('resize', fit);
-</script>
+```bash
+cp <skill-dir>/boilerplate/preview-gallery.html workdir/previews/index.html
 ```
+
+It is data-driven: it reads `directions.json` and builds a labeled cell per direction with an
+`<iframe src="option-N/preview.html">`, each rendered at a real 1280×800 desktop viewport and
+scaled to fit its cell with a **measured** transform (`clientWidth / 1280`) so it fills the cell
+exactly on any monitor — no dead whitespace, no hardcoded `scale()`. It handles both paths
+automatically: one direction → a single full-width cell, four → a 2×2 grid. So the only files you
+author for the gallery are `directions.json` + the `option-N/preview.html` previews.
 
 **Serve the gallery over a local HTTP server — never hand the user a `file://` path.** The
 `index.html` loads each preview through a relative `<iframe src>`, and a sandboxed browser
