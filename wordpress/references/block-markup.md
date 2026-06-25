@@ -42,24 +42,33 @@ Three outcomes:
 The inner loop validates against pinned core packages only — plugin blocks, PHP patterns,
 and the site's actual WP version are invisible to it.
 
-**Final gate — before declaring any block work finished:**
+**Final gate — ONE pass, after every file for the deliverable is inner-loop-clean:**
 
 ```bash
 node scripts/checker/editor-gate.mjs <site-url> <theme-dir>
 ```
 
-This opens the live site's editor (Playwright). **Just run it** — it auto-uses Playwright's
+Run editor-gate **exactly once per hand-back** — once for the landing page (`design.md` §5), once
+for any later additions (§6). It is slow (it launches Chromium and loads the live editor), so it is
+**not** an inner-loop step and **not** a fix-discovery loop: the inner loop above (fix-blocks +
+validate-blocks, both instant and free) is where you find and fix validity, and with fix-blocks
+auto-repairing the recurring cover/border/order cases it should print `GATE PASS` on the first try.
+Before running it, make sure every template/part/pattern has been through the inner loop.
+
+It opens the live site's editor (Playwright). **Just run it** — it auto-uses Playwright's
 bundled/cached Chromium, then falls back to your system-installed Chrome. Don't pre-run
 `npx playwright install chromium`: that download is unsupported on some newer OSes (e.g. Ubuntu
 26.04) and the gate doesn't need it — a bundled/cached build is usually already present, and a
 failed *install* is not a failed *gate*. Only install a browser if the gate itself reports it
 tried both and found none. It validates every template, part, and **server-rendered pattern**
-against the site's full block registry. It must print `GATE PASS`. On any `INVALID`, the gate
-now prints the **canonical markup the editor expects** right beneath the failure line — diff it
-against your file; that diff is the fix (the same answer `canonicalize.mjs` gives, inline, so a
-single gate run usually tells you both *what* is wrong and *what* it should be). Then check
-rendered layout with a screenshot (see `design.md`) — the gate catches invalid blocks, not a
-hero rendering with gutters.
+against the site's full block registry. It must print `GATE PASS`.
+
+**If it reports `INVALID`,** that means a file skipped the inner loop. The gate prints the
+**canonical markup the editor expects** beneath the failure line — but rather than hand-diffing,
+run `fix-blocks.cjs` then `validate-blocks.cjs` on the *named* file, fix anything they still flag,
+and re-run the gate **once**. Don't iterate the editor gate to chip away at failures one at a time
+— that is the slow path the inner loop exists to prevent. Then check rendered layout with a
+screenshot (see `design.md`) — the gate catches invalid blocks, not a hero rendering with gutters.
 
 **Only if `validate-blocks.cjs` still reports `INVALID` after `fix-blocks.cjs` (rare)** — the
 block is beyond mechanical repair. Ask the live editor for the canonical form rather than

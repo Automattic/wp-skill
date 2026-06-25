@@ -39,12 +39,13 @@ Run `scripts/playground.sh` from the project directory (its state lives in `./wo
    write to a user-designated production site, create and verify a backup manifest
    (`references/backups-and-safety.md`). If the user says to skip it, refuse — creating one
    takes ~30 seconds. File copies count as writes.
-3. **Block work isn't done until both gates pass.** After writing or editing any markup, FIRST
-   auto-repair it — `fix-blocks.cjs` on the files (mechanical, no browser; fixes the recurring
-   cover/border/order INVALID cases) — then `validate-blocks.cjs`, then `editor-gate.mjs` against
-   the live site. Do not hand-fix block validity or open the editor to fix it; run the fixer.
-   Invalid blocks render fine on the frontend and break only in the editor — screenshots can't
-   catch them. (`references/block-markup.md`.)
+3. **Block work isn't done until both gates pass.** Per file, as you write/edit markup: auto-repair
+   with `fix-blocks.cjs` (mechanical, no browser; fixes the recurring cover/border/order INVALID
+   cases), then `validate-blocks.cjs` — both instant. Run the slow `editor-gate.mjs` (live editor)
+   **once per hand-back, at the very end**, after every file is inner-loop-clean — not per file and
+   not as a fix-discovery loop; it should pass first try. Do not hand-fix validity or open the
+   editor to fix it; run the fixer. Invalid blocks render fine on the frontend and break only in the
+   editor — screenshots can't catch them. (`references/block-markup.md`.)
 4. **Never edit WordPress core.** `wp search-replace` always dry-runs first.
 5. **Leave the server running when you hand work back — the user needs it live to test.**
    Do NOT run `playground.sh stop` just because development is "done"; stopping a site the
