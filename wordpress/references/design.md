@@ -147,44 +147,59 @@ them before a temp dir vanishes), so just note which option won — keep the who
 for reference. The finished theme's first fold must be recognizably descended from the selected
 preview; the rest of the site extends its visual language.
 
-### 5. Build the theme in this order — every step is required, not optional
+### 5. Build the LANDING PAGE first — not the whole site
 
-A theme built straight from the preview without these steps reads as generic AI output. Do **all
-of them**, in order, before handing back. Skipping any is an incomplete build — the motion pass in
-particular is what separates a live-feeling site from AI slop, and it's the most common omission.
-Read each named reference when you reach its step.
+**Ship the landing page, then stop.** The slowest, most disappointing builds compose every page,
+template, CPT, and image up front on the assumption the user wants the whole site — most of that
+work is unseen while the user waits. Build only the landing page (the home/front page + the chrome
+it needs), get it running, show the user, and **then** ask what else to build (§6). For a
+`landing-page` layoutMode the landing IS the site; for everything else it's the home page.
+
+Do these in order, then hand back the live landing page:
 
 0. **Scaffold the theme** — `scripts/scaffold-theme.sh <theme-dir> "<Theme Name>"`. One command
    drops the boilerplate you'd otherwise hand-write and frequently get wrong: `theme.json` with all
    the rigor already wired (root padding, `useRootPaddingAwareAlignments`, every flex/grid
-   `blockGap` default, paired button/link colors), `style.css` (theme header + base utilities:
-   loop layouts, equal-cards, footer reset), `functions.php` (motion runtime enqueued frontend-only
-   + a fonts hook), `content-loader.php`, and `assets/motion/`. Steps 2 and 5 below become *fill in
-   the blanks*, not *write from scratch*.
+   `blockGap` default, paired button/link colors), `style.css` (theme header + base utilities) that
+   `functions.php` already enqueues on the front end **and** the editor, the motion runtime
+   (frontend-only) + a fonts hook, and `content-loader.php`. Steps 2 and 5 become *fill in the
+   blanks*, not *write from scratch*.
 1. **Write the site spec** — `references/site-spec.md`. Derive `workdir/.playground/site-spec.json`
-   from the chosen direction + brief: `layoutMode`, `headerBehavior`, `contentMode`, the cinematic
-   `heroComposition`, typography. Every later file branches on it; deciding it once up front is
-   what stops the build from defaulting to a generic vertical stack with a guessed header.
+   (`layoutMode`, `headerBehavior`, `contentMode`, `heroComposition`, typography). Every file
+   branches on it.
 2. **Make the scaffolded theme.json the design's** — `references/themes-and-patterns.md`. Recolor
-   the 8 palette slugs to the direction (keep the slug names), swap the two font families to the
-   design's (not Inter/Roboto/Arial), and tune `contentSize`/`wideSize`/`blockGap` to the spec.
-   The rigor is already there — verify WCAG-AA contrast on your new colors; don't re-derive the
-   structure.
-3. **Page-frame CSS for the layoutMode** — if `layoutMode` is anything other than
-   `vertical-stack`, follow `references/layout-modes.md` for the sidebar/landing/magazine/gallery
-   shell and the sticky/overlay header contract.
-4. **Compose the pages** — `references/aesthetics.md`: commit to the aesthetic, plan one line per
-   page (section count + archetypes), give the homepage the richest treatment (≥3 unique
-   sections), and ensure every page has at least one section the others don't. Write each page as
-   `content/pages/<slug>.html` (name the home page `home.html`); `content-loader.php` self-registers
-   them as pages and promotes `home` to the static front page — do NOT hand-roll `wp_insert_post`,
-   a temp setup PHP, or `playground.sh front-page`.
-5. **Add motion before hand-back** — `references/motion.md`. The runtime is already copied and
-   enqueued by the scaffold, so just add the class hooks: section reveal is always-on; pick 1–2
-   richer homepage effects within the budget. A static theme is an unfinished theme.
+   the 8 palette slugs to the direction (keep the slug names), swap the two font families (not
+   Inter/Roboto/Arial), tune `contentSize`/`wideSize`/`blockGap`. The rigor is already there —
+   verify WCAG-AA contrast on your new colors; don't re-derive the structure.
+3. **Page-frame CSS for the layoutMode** — if `layoutMode` isn't `vertical-stack`, follow
+   `references/layout-modes.md` for the shell + sticky/overlay header contract.
+4. **Compose the landing page only** — `references/aesthetics.md`. Write `parts/header.html`,
+   `parts/footer.html`, `templates/front-page.html` (+ `templates/index.html` as the fallback), and
+   `content/pages/home.html` — the centerpiece, ≥3 unique sections committed to the aesthetic.
+   `content-loader.php` self-registers `home` and promotes it to the static front page (do NOT
+   hand-roll `wp_insert_post`, a temp setup PHP, or `playground.sh front-page`). **Generate only the
+   images the landing needs** (the hero + a few section images), not the whole site's library.
+   **Do NOT write the other pages (menu/about/contact…), their templates, CPTs, or forms yet** —
+   that's §6, after the user has seen this.
+5. **Add motion** — `references/motion.md`. The runtime is already enqueued; add the class hooks:
+   section reveal is always-on; pick 1–2 richer homepage effects within the budget.
 
-(On the skip path — user declined the gallery — still run all these steps from the single
-direction you chose.)
+Then run the gates **once** over just these files (fix-blocks → validate-blocks → editor-gate),
+screenshot the landing (desktop + mobile), and hand it back **live** with the URL.
+
+(On the skip path — user declined the gallery — still build the landing page from the single
+direction you chose, then §6.)
+
+### 6. Then ask what else to build — scoped to the site type
+
+Once the landing page is running and the user has seen it, **stop and ask in chat** what to build
+next — don't assume. Offer the specific candidates this site implies, e.g. for a restaurant: the
+**Menu**, **Our Story**, and **Visit/Reserve** pages; a **reservation form** (CPT + REST per the
+data-persistence pattern); the `page.html`/`single.html`/`archive.html` templates those need. For a
+blog: the post templates + sample posts. For a portfolio: a projects CPT + archive. Build only what
+the user confirms, reuse the established design language (same scaffold, palette, patterns), and
+re-run the gates on the new files. Each added page is `content/pages/<slug>.html`; the loader picks
+it up automatically. This keeps the first hand-back fast and lets the user steer scope.
 
 ## Verify and polish from evidence, not pixels
 

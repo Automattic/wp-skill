@@ -144,3 +144,30 @@ attacks the ~40% validity-firefighting overhead **and** makes the design machine
 
 Items 1–2 are unambiguous and applied in this pass. 3–5 are the larger boilerplate effort to
 confirm scope before building.
+
+---
+
+## Session 2 (naturaleza-sabia, 36 min) — still too slow
+
+A second full build (`sessions/naturaleza-sabia1-design-quality-port.md`) took 36 min. Three
+structural causes, all now addressed:
+
+1. **Built the entire site up front** — 4 pages, 9 patterns, **9 AI images**, a 360-line
+   `style.css` — most of it unseen while the user waited. **Fix (primary): landing-page-first.**
+   `design.md` §5 now builds only the home/front page + its chrome and hands it back live; the new
+   §6 asks the user what else to build (other pages, templates, CPTs, forms) scoped to the site
+   type. SKILL rule 8 updated. This is the big cut — roughly half the first-pass work and a
+   fraction of the image generations.
+2. **Scaffold bug — `functions.php` never enqueued `style.css`.** Block themes don't auto-load it,
+   so the whole custom-CSS layer (header overlay, cards, menu, footer) silently did nothing while
+   theme.json colors worked — the agent burned a long CSSOM/service-worker diagnostic detour
+   (~log 1423–1513) to discover it. **Fixed:** the scaffold's `functions.php` now enqueues
+   `get_stylesheet_uri()` on the front end and `add_editor_style('style.css')` for the editor.
+3. **`fix-blocks` bug — it HTML-escaped `<?php`** inside a cover's `url`/`src` (patterns embed
+   `<?php echo esc_url( get_theme_file_uri(...) ); ?>`), corrupting the hero → manual rewrite.
+   **Fixed:** `fix-blocks` now skips pattern bodies containing `<?php` (parse/serialize can't
+   round-trip embedded PHP); validate-blocks + a hand fix cover those rare files.
+
+Remaining speed ideas (not yet done): adopt Telex's `theme:./` asset pseudo-URL + a render-time
+rewrite boilerplate so patterns carry no inline PHP at all (then fix-blocks can process them);
+consider making `editor-gate` a single final pass rather than per-batch.

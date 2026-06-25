@@ -152,6 +152,14 @@ function fixFile(path, dry) {
   if (path.endsWith('.php')) {
     const parts = splitPattern(content);
     if (!parts) { console.log(`skip   ${path} — no closing ?> before markup`); return false; }
+    // Embedded PHP in the block markup (e.g. <?php echo esc_url( get_theme_file_uri(...) ); ?> in a
+    // cover url/image src) cannot survive parse()→serialize(): the serializer HTML-escapes the
+    // `<?php` into `<?php`, silently breaking the file. parse() doesn't understand PHP, so we
+    // can't fix these mechanically — skip and let validate-blocks/editor + a hand fix handle them.
+    if (parts.body.includes('<?php')) {
+      console.log(`skip   ${path} — embedded PHP in block markup (can't auto-fix; check with validate-blocks)`);
+      return false;
+    }
     result = fixMarkup(parts.body);
     rewrite = parts.header + result.html;
   } else {

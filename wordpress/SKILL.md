@@ -65,14 +65,16 @@ Run `scripts/playground.sh` from the project directory (its state lives in `./wo
    to that brief (still shown and approved in the browser — not silently skipped). Build what the
    user asked for; previews confirm the execution, they don't reopen a decision the brief already
    made.
-8. **A new theme isn't built until the build sequence runs** (`references/design.md` §5):
-   **scaffold** (`scripts/scaffold-theme.sh` — drops theme.json rigor, base CSS, motion runtime,
-   content-loader) → site spec (`site-spec.md`) → recolor theme.json (`themes-and-patterns.md`) →
-   page-frame CSS for the layoutMode (`layout-modes.md`) → page composition (`aesthetics.md`) →
-   scroll-motion hooks (`motion.md`). Scaffold first so the rigor and motion can't be skipped; do
-   not hand-write theme.json/style.css boilerplate or hand-roll page creation / front-page wiring
-   (`content-loader.php` does it). A theme that renders pages but skips the site spec or ships zero
-   motion is an incomplete build — these are the steps that separate a designed site from AI slop.
+8. **Build the LANDING PAGE first, then ask what else to build** (`references/design.md` §5–§6).
+   Run the build sequence — **scaffold** (`scripts/scaffold-theme.sh` — drops theme.json rigor,
+   base CSS, motion runtime, content-loader) → site spec (`site-spec.md`) → recolor theme.json
+   (`themes-and-patterns.md`) → page-frame CSS (`layout-modes.md`) → compose the home/front page
+   only (`aesthetics.md`) → motion hooks (`motion.md`) — then hand back the **live landing page**
+   and STOP. Do not pre-build the other pages, templates, CPTs, or forms, or generate the whole
+   image library, on the assumption the user wants them — that's the slow path. Once the user has
+   seen the landing page, ask which of the site-type-appropriate extras to build (§6). Scaffold
+   first so rigor/motion can't be skipped; never hand-write theme.json/style.css boilerplate or
+   hand-roll page creation / front-page wiring (`content-loader.php` does it).
 9. **Image handling needs an explicit choice — always ask, before design previews and any
    markup. Being logged in is not consent.** Check `workdir/.playground/images.json` first (a recorded
    answer is the only thing that skips the question), then follow `references/images-media.md`:

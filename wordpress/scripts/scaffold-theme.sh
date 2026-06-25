@@ -93,13 +93,19 @@ if ( ! defined( 'ABSPATH' ) ) {
 // Pages self-register from content/pages/*.html and the home page becomes the front page.
 require_once get_theme_file_path( 'content-loader.php' );
 
-// Motion runtime — FRONTEND ONLY (never add_editor_style / enqueue_block_assets; motion.css sets
-// reveal-on-scroll opacity:0 and would blank the editor canvas). See references/motion.md.
+// Main stylesheet + motion runtime.
+// CRITICAL: block themes do NOT auto-enqueue style.css on the front end — without this the
+// theme's entire custom-CSS layer (header positioning, cards, menu, footer) silently does nothing
+// while theme.json colors still work. Enqueue it on the front end AND register it as an editor
+// style so the Site Editor canvas matches. Motion stays FRONTEND ONLY (never add_editor_style /
+// enqueue_block_assets — motion.css sets reveal-on-scroll opacity:0 and would blank the editor).
+add_action( 'after_setup_theme', function () { add_editor_style( 'style.css' ); } );
 add_action(
 	'wp_enqueue_scripts',
 	function () {
 		\$ver = wp_get_theme()->get( 'Version' );
-		wp_enqueue_style( '${prefix}-motion', get_theme_file_uri( 'assets/motion/motion.css' ), array(), \$ver );
+		wp_enqueue_style( '${prefix}-style', get_stylesheet_uri(), array(), \$ver );
+		wp_enqueue_style( '${prefix}-motion', get_theme_file_uri( 'assets/motion/motion.css' ), array( '${prefix}-style' ), \$ver );
 		wp_enqueue_script( '${prefix}-motion', get_theme_file_uri( 'assets/motion/motion.js' ), array(), \$ver, true );
 	}
 );
