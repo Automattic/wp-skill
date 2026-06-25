@@ -208,8 +208,16 @@ generate real images between them:
 2. **Pre-flight** the markers — `check --files …` (cheap, no network) — and fix any issues.
 3. **Gate 1** (`validate-blocks.cjs`) then **Gate 2** (`editor-gate.mjs`) on the markup. Use
    `placeholders --files …` so the layout renders while you iterate.
-4. **Generate** real images (`generate --files …`) only after both gates are green.
-5. **Re-run Gate 2** if generation changed any block markup. `generate` rewrites alts to human
+4. **Generate** real images (`generate --files …`) only after both gates are green. **Pass a glob
+   of EVERY marker-bearing file, not a hand-picked subset** — `<theme>/patterns/*.php
+   <theme>/templates/*.html <theme>/content/pages/*.html`. A marker-bearing file you forget to pass
+   is never generated and ships as a gray placeholder (the most common cause of "one image is still
+   a placeholder" — a single missed `patterns/story.php`).
+5. **Verify no marker was missed.** After generating, `grep -rl "AI_IMAGE" <theme>/patterns
+   <theme>/templates <theme>/content` must come back **empty** (generation rewrites every alt it
+   fills to human text, so a remaining `AI_IMAGE:` = an ungenerated slot still showing a
+   placeholder). If anything is left, you skipped that file in step 4 — generate it.
+6. **Re-run Gate 2** if generation changed any block markup. `generate` rewrites alts to human
    text — and for a `core/cover` it rewrites the block-comment `"alt"` too — so the markup the
    editor sees is different from what gate 2 last approved. Re-running it confirms the rewrite
    left every block valid (this is exactly where a cover desync would resurface).

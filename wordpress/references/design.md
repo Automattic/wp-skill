@@ -180,10 +180,12 @@ Do these in order, then hand back the live landing page:
 6. **Generate the landing's images LAST — from the markup, never before it.** Every image is
    authored as an `AI_IMAGE:` alt on its `<img>` by the code that uses it (the writer chose the
    description, aspect, and style for that exact slot — `references/images-media.md`). Only after
-   the markup exists do you fill those slots: `wpcom-images.mjs generate --files <the landing
-   patterns/templates>` reads each alt and generates the matching image. Generating up front from
-   invented prompts (before the patterns exist) defeats this — the image won't match the slot.
-   Generate only the landing's slots now, not the whole site's library.
+   the markup exists do you fill those slots: `wpcom-images.mjs generate --files <glob of EVERY
+   landing pattern + template>` reads each alt and generates the matching image. **Pass a glob, not
+   a hand-picked list** — a forgotten marker-bearing file ships a gray placeholder. Then verify:
+   `grep -rl AI_IMAGE` over the landing files must be empty. Generating up front from invented
+   prompts (before the patterns exist) defeats this — the image won't match the slot. Generate only
+   the landing's slots now, not the whole site's library.
 
 Then run the gates **once** over just these files (fix-blocks → validate-blocks → editor-gate; the
 image step above brackets the gates per `references/images-media.md` — markers in, generate after),
