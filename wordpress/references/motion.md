@@ -83,11 +83,18 @@ genuine stat numbers. `data-counter-target` is required; `-suffix`/`-prefix` opt
 (or any core block) fail the editor gate — the block's saved markup won't match and the editor
 reports "invalid content." `wp:html` is freeform, so the `data-counter-target` attribute is
 valid there, and `motion.js`'s `.counter[data-counter-target]` selector matches it the same.
-Size/weight/color it from `style.css` (the `.counter` / a `.stat-num` class), not block attrs:
+Size/weight/color it from `style.css` (the `.counter` / a `.stat-num` class), not block attrs.
+
+**Write the FINAL value as the span's text — not `0`.** `motion.js` counts from 0 when it runs,
+but it bails under `prefers-reduced-motion: reduce` and does nothing with JS off/failed — in those
+cases the span just keeps its HTML text. If that text is `0`, reduced-motion and no-JS visitors
+read `0` (wrong), and a full-page screenshot (which emulates reduced motion) captures `0` and looks
+broken. Author the formatted final value (matching `data-counter-target` + the suffix); `motion.js`
+overwrites it from 0 and animates up when it does run, so you lose nothing:
 
 ```html
 <!-- wp:html -->
-<span class="counter stat-num" data-counter-target="600000" data-counter-suffix="+">0</span>
+<span class="counter stat-num" data-counter-target="600000" data-counter-suffix="+">600,000+</span>
 <!-- /wp:html -->
 ```
 
