@@ -62,14 +62,18 @@ For each direction, generate one complete, self-contained HTML document:
   theme ever will.
 - Hero imagery follows the image-handling choice (resolved above, recorded in
   `workdir/.playground/images.json` — see `references/images-media.md`):
-  - **`yes`** (generate AI): generate a real hero image for *each* direction and use it — a
-    preview that says "yes to images" but renders a CSS gradient misrepresents the design. Derive
-    a prompt from the direction's hero composition + mood and write it into that option's preview
-    dir, e.g. `node <skill-dir>/scripts/wpcom-images.mjs generate --prompt "<hero composition>, <style> style" --aspect 16:9 --out workdir/previews/option-N/hero.png`, then reference it with a
-    relative `<img src="hero.png">` (the gallery is served over HTTP, so relative paths resolve).
-    This is ~4 generations (one per direction), counts against quota, and the chosen direction's
-    hero can be reused. If a generation fails or the endpoint is unavailable, fall back to a
-    placeholder block (next case) for that one preview rather than shipping a gray box.
+  - **`yes`** (generate AI): a preview that says "yes to images" but renders a CSS gradient
+    misrepresents the design. **Write the preview HTML FIRST**, with the hero `<img>` carrying the
+    image prompt in its alt — the HTML is the source of truth for what gets generated:
+    `<img id="hero-image" src="hero.png" alt="AI_IMAGE: <description grounded in this direction's
+    hero composition + mood> | <style> | <aspect>">` (relative `src` — the gallery is served over
+    HTTP). **Then generate from that alt**, reading the description / style / aspect you just wrote
+    (not a separately-invented prompt):
+    `node <skill-dir>/scripts/wpcom-images.mjs generate --prompt "<description>, <style> style" --aspect <aspect> --out workdir/previews/option-N/hero.png`.
+    Generating before the HTML exists means the image isn't built from the alt — write, then
+    generate. This is ~4 generations (one per direction), counts against quota, and the chosen
+    direction's hero can be reused. If a generation fails or the endpoint is unavailable, fall back
+    to a placeholder block (next case) for that one preview rather than shipping a gray box.
   - **`placeholders`** (the default): show a plain solid-color block at the hero's aspect ratio
     (a CSS block tinted from the direction's palette is fine — no need to write a PNG for the
     throwaway preview), clearly reading as "photo goes here". The layout, proportions, and
@@ -169,14 +173,20 @@ Do these in order, then hand back the live landing page:
    `parts/footer.html`, `templates/front-page.html` (+ `templates/index.html` as the fallback), and
    `content/pages/home.html` — the centerpiece, ≥3 unique sections committed to the aesthetic.
    `content-loader.php` self-registers `home` and promotes it to the static front page (do NOT
-   hand-roll `wp_insert_post`, a temp setup PHP, or `playground.sh front-page`). **Generate only the
-   images the landing needs** (the hero + a few section images), not the whole site's library.
-   **Do NOT write the other pages (menu/about/contact…), their templates, CPTs, or forms yet** —
-   that's §6, after the user has seen this.
+   hand-roll `wp_insert_post`, a temp setup PHP, or `playground.sh front-page`). **Do NOT write the
+   other pages (menu/about/contact…), their templates, CPTs, or forms yet** — that's §6.
 5. **Add motion** — `references/motion.md`. The runtime is already enqueued; add the class hooks:
    section reveal is always-on; pick 1–2 richer homepage effects within the budget.
+6. **Generate the landing's images LAST — from the markup, never before it.** Every image is
+   authored as an `AI_IMAGE:` alt on its `<img>` by the code that uses it (the writer chose the
+   description, aspect, and style for that exact slot — `references/images-media.md`). Only after
+   the markup exists do you fill those slots: `wpcom-images.mjs generate --files <the landing
+   patterns/templates>` reads each alt and generates the matching image. Generating up front from
+   invented prompts (before the patterns exist) defeats this — the image won't match the slot.
+   Generate only the landing's slots now, not the whole site's library.
 
-Then run the gates **once** over just these files (fix-blocks → validate-blocks → editor-gate),
+Then run the gates **once** over just these files (fix-blocks → validate-blocks → editor-gate; the
+image step above brackets the gates per `references/images-media.md` — markers in, generate after),
 screenshot the landing (desktop + mobile), and hand it back **live** with the URL.
 
 (On the skip path — user declined the gallery — still build the landing page from the single

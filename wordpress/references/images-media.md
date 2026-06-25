@@ -194,6 +194,13 @@ generates, so it's safe to run anytime, logged in or not.
 
 ## Filling the slots: after the editor gate, before "done"
 
+**The image is built from the code, not before it.** The description, aspect, and style for every
+image are authored by the writer of the markup that uses it, in the `<img>`'s `AI_IMAGE:` alt for
+that exact slot — and `generate --files` generates each image *from that alt*. So generation always
+comes AFTER the pattern/template (or the preview HTML) is written. Never pre-generate images from
+separately-invented prompts before the markup exists: the result won't match the slot's intended
+content/ratio/style. (The same rule binds design previews — see `references/design.md` §2.)
+
 **Order of operations.** Markers are just alt text, so image work *brackets* the gates — never
 generate real images between them:
 
