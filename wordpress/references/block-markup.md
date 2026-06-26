@@ -249,6 +249,16 @@ WordPress constrains children of any constrained-layout container to
   groups with `{"align":"full","layout":{"type":"default"}}`.
 - **Standard reading content**: omit `align` entirely.
 
+**A `constrained` layout auto-CENTERS its children** (`.is-layout-constrained > *` gets
+`max-width: contentSize; margin-inline: auto`). That's right for a centered hero, but it is the
+wrong default for a **left-aligned** content column (the common bottom-left hero: eyebrow + heading
++ lede + buttons + a stat row sharing one left edge). Wrap that column in a **`default` (flow)**
+layout group, not constrained — flow keeps children full-width and left-aligned, so a per-element
+`max-width` in CSS narrows the measure *without* re-centering it. Symptom of getting this wrong:
+the heading and lede sit indented/centered while the eyebrow, buttons, and stats hug the left — a
+staggered set of left edges. A screenshot shows it instantly; `getBoundingClientRect().left` of
+each child confirms it (they should all match).
+
 The observed failure: a hero meant to be full-width renders ~1248px at a 1280px viewport —
 visible gutters. Verify the first content section's computed width equals the viewport
 width; if not, the cause is `align`/`layout` on the block (or `useRootPaddingAwareAlignments`
