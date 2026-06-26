@@ -254,6 +254,18 @@ visible gutters. Verify the first content section's computed width equals the vi
 width; if not, the cause is `align`/`layout` on the block (or `useRootPaddingAwareAlignments`
 / root padding in theme.json), not missing CSS.
 
+**`core/post-content` must carry `"align":"full"` — the failure that caps the *entire page*,
+not one section.** When a page's sections live in `content/pages/*.html` (rendered through
+`<!-- wp:post-content … /-->` in `front-page.html`/`page.html`), the post-content block sits inside
+the constrained `main` group. Without `align`, post-content is itself constrained to `contentSize`,
+so **every** `align:full` section inside it can only break out to that ~content width — the whole
+page renders centered at `contentSize` (e.g. 820px) with wide gutters, and `alignwide` grids come
+out narrower than `wideSize`. The section markup looks correct in isolation, which makes this hard
+to spot. Give post-content the breakout so its constrained layout governs inner alignment:
+`<!-- wp:post-content {"align":"full","layout":{"type":"constrained"}} /-->`. (Interior templates
+meant purely for centered prose can keep post-content constrained on purpose.) Verify a top-level
+`align:full` section's computed width equals the viewport, not `contentSize`.
+
 Vertical rhythm is owned by layout CSS, not your margins:
 `:where(.is-layout-flow) > * + *` applies `margin-block-start: var(--wp--style--block-gap)`.
 Set spacing through `theme.json` `styles.spacing.blockGap` or per-block spacing attributes

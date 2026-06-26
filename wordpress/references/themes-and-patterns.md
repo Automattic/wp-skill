@@ -103,6 +103,29 @@ display text but cap ~3.5rem — sizes above 4rem rarely improve a design. Line-
 1.5–1.65, headings 1.1–1.3, never below 1.0. Avoid Inter/Roboto/Arial/Open Sans/system fonts;
 pair a distinctive display font with a refined body font.
 
+**`defaultFontSizes: false` is mandatory once you define `fontSizes` — the typography twin of
+`defaultPalette: false`.** WordPress core ships default font-size presets on the *standard slugs*
+`small`/`medium`/`large`/`x-large` (13px / 20px / **36px** / 42px). With the default
+`settings.typography.defaultFontSizes: true`, **core's values WIN over a theme `fontSizes` entry
+that reuses those slugs** — so your `"large": "1.25rem"` silently renders as core's **36px**, and
+only a non-core slug like `huge` survives. The result is body copy and headings far larger and more
+uniform than your scale intends, with nothing in your own files to explain it. Always set
+`settings.typography.defaultFontSizes: false` when you ship a `fontSizes` array (the
+`boilerplate/theme.json` does). Verify after: `--wp--preset--font-size--large` in the rendered CSS
+must equal *your* value, not 36px.
+
+**`fluid` and hand-authored `clamp()` don't mix.** With `typography.fluid: true`, WordPress
+re-wraps each preset `size` in its own generated `clamp()` — so a `clamp()` you wrote gets
+re-fluidized into something you didn't. If you author your own responsive sizes with `clamp()`
+(as the boilerplate does for `x-large`/`huge`), set `typography.fluid: false` so your values pass
+through verbatim. If instead you want WP's fluid scaling, give plain `rem`/`px` sizes and let it
+generate the clamps — never both.
+
+When you change `theme.json` font sizes or palette and the rendered CSS doesn't update, it is a
+**cache**, not your edit: Playground's persistent PHP process and a global-styles transient hold the
+compiled stylesheet. Restart (`playground.sh stop` → `ensure …`) to force a clean re-read before
+concluding a value is wrong.
+
 ## Fonts
 
 Two options:
@@ -146,6 +169,11 @@ are mandatory; Slug uses the theme's text domain):
   compose `templates/index.html` from them. Give every top-level section group
   `"style":{"spacing":{"margin":{"top":"0"}}}` and control rhythm with padding, and use
   `align: full`/`wide` for sections (see the layout cascade in `block-markup.md`).
+- When the sections live in a page rendered through `core/post-content` (the
+  `content/pages/home.html` + `front-page.html` flow the loader uses), the post-content block
+  **must** be `<!-- wp:post-content {"align":"full","layout":{"type":"constrained"}} /-->`.
+  Without `align:full` it stays at `contentSize` and silently caps every full-bleed section inside
+  it — see the post-content rule in `block-markup.md`.
 
 ## Navigation
 
