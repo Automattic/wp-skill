@@ -23,10 +23,18 @@
       ]
     },
     "typography": {
-      "fluid": true,
+      "fluid": false,
+      "defaultFontSizes": false,
       "fontFamilies": [
         { "slug": "heading", "name": "Heading", "fontFamily": "Georgia, 'Times New Roman', serif" },
         { "slug": "body",    "name": "Body",    "fontFamily": "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" }
+      ],
+      "fontSizes": [
+        { "slug": "small",   "size": "0.875rem",  "name": "Small" },
+        { "slug": "medium",  "size": "1.0625rem", "name": "Medium" },
+        { "slug": "large",   "size": "1.25rem",   "name": "Large" },
+        { "slug": "x-large", "size": "clamp(1.6rem, 1.25rem + 1.4vw, 2.125rem)", "name": "Extra Large" },
+        { "slug": "huge",    "size": "clamp(2.25rem, 1.6rem + 2.8vw, 3.25rem)", "name": "Huge" }
       ]
     },
     "spacing": {
@@ -38,6 +46,7 @@
     "color": { "background": "var:preset|color|base", "text": "var:preset|color|contrast" },
     "typography": {
       "fontFamily": "var:preset|font-family|body",
+      "fontSize": "var:preset|font-size|medium",
       "lineHeight": "1.6"
     },
     "spacing": {

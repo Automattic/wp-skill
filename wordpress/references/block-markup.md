@@ -249,10 +249,32 @@ WordPress constrains children of any constrained-layout container to
   groups with `{"align":"full","layout":{"type":"default"}}`.
 - **Standard reading content**: omit `align` entirely.
 
+**A `constrained` layout auto-CENTERS its children** (`.is-layout-constrained > *` gets
+`max-width: contentSize; margin-inline: auto`). That's right for a centered hero, but it is the
+wrong default for a **left-aligned** content column (the common bottom-left hero: eyebrow + heading
++ lede + buttons + a stat row sharing one left edge). Wrap that column in a **`default` (flow)**
+layout group, not constrained — flow keeps children full-width and left-aligned, so a per-element
+`max-width` in CSS narrows the measure *without* re-centering it. Symptom of getting this wrong:
+the heading and lede sit indented/centered while the eyebrow, buttons, and stats hug the left — a
+staggered set of left edges. A screenshot shows it instantly; `getBoundingClientRect().left` of
+each child confirms it (they should all match).
+
 The observed failure: a hero meant to be full-width renders ~1248px at a 1280px viewport —
 visible gutters. Verify the first content section's computed width equals the viewport
 width; if not, the cause is `align`/`layout` on the block (or `useRootPaddingAwareAlignments`
 / root padding in theme.json), not missing CSS.
+
+**`core/post-content` must carry `"align":"full"` — the failure that caps the *entire page*,
+not one section.** When a page's sections live in `content/pages/*.html` (rendered through
+`<!-- wp:post-content … /-->` in `front-page.html`/`page.html`), the post-content block sits inside
+the constrained `main` group. Without `align`, post-content is itself constrained to `contentSize`,
+so **every** `align:full` section inside it can only break out to that ~content width — the whole
+page renders centered at `contentSize` (e.g. 820px) with wide gutters, and `alignwide` grids come
+out narrower than `wideSize`. The section markup looks correct in isolation, which makes this hard
+to spot. Give post-content the breakout so its constrained layout governs inner alignment:
+`<!-- wp:post-content {"align":"full","layout":{"type":"constrained"}} /-->`. (Interior templates
+meant purely for centered prose can keep post-content constrained on purpose.) Verify a top-level
+`align:full` section's computed width equals the viewport, not `contentSize`.
 
 Vertical rhythm is owned by layout CSS, not your margins:
 `:where(.is-layout-flow) > * + *` applies `margin-block-start: var(--wp--style--block-gap)`.
